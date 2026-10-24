@@ -73,11 +73,11 @@ export default function AddMember() {
       <Screen header="modal" title="Member added">
         <View style={{ gap: 16 }}>
           <Text tone="soft">
-            {done.name} is on your list ({done.code}). Send them this invite so they can open the app. It works for {done.invite.expiresInDays} days and only once.
+            {done.name} is on your list ({done.code}). Send them this code. They sign in with their number and this code, and it keeps working until you send a new one.
           </Text>
           <Card style={s.code}>
             <Text variant="caption" tone="soft">
-              Invite code
+              Member code
             </Text>
             <Text variant="hero">{done.invite.inviteCode}</Text>
           </Card>
@@ -119,12 +119,12 @@ export default function AddMember() {
               {errors.form}
             </Text>
           ) : null}
-          <Button title="Add member and get invite" full loading={busy} onPress={save} />
+          <Button title="Add member and get their code" full loading={busy} onPress={save} />
         </>
       }>
       <View style={{ gap: 16 }}>
         <Input label="Full name" value={name} onChangeText={setName} autoComplete="name" autoCapitalize="words" error={errors.name} />
-        <Input label="Mobile number" prefix="+91" value={phone} onChangeText={setPhone} keyboardType="phone-pad" error={errors.phone} hint="We send the invite to this number on WhatsApp." />
+        <Input label="Mobile number" prefix="+91" value={phone} onChangeText={setPhone} keyboardType="phone-pad" error={errors.phone} hint="They sign in with this number and the code you get next." />
         <Input label="Email (optional)" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} error={errors.email} hint="Many members don’t have one. That’s fine." />
       </View>
 

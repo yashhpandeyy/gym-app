@@ -124,6 +124,8 @@ export const api = {
   ownerLogin: (email: string, password: string) => request<OwnerSession | AdminSession>('POST', '/v1/auth/owner-login', { body: { email, password } }),
   login: (gymCode: string, phone: string, secret: string) =>
     request<{ token: string; role: 'owner' | 'staff'; name: string; gymStatus: string }>('POST', '/v1/auth/login', { body: { gymCode, phone, secret } }),
+  memberLogin: (phone: string, code: string) =>
+    request<{ token: string; name: string; memberId: string; gym: FullGym }>('POST', '/v1/auth/member-login', { body: { phone, code } }),
   redeem: (gymCode: string, phone: string, code: string) => request<{ token: string; name: string; memberId: string }>('POST', '/v1/auth/redeem', { body: { gymCode, phone, code } }),
   pair: (gymCode: string, name: string, phone: string) => request<{ pairingId: string; secret: string; qr: string }>('POST', '/v1/pair', { body: { gymCode, name, phone } }),
   pairStatus: (id: string, secret: string) => request<{ status: 'waiting' | 'approved'; token?: string; memberId?: string }>('GET', `/v1/pair/${id}?secret=${encodeURIComponent(secret)}`),

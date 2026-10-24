@@ -42,21 +42,20 @@ const find = (docs, kind, id) => docs.find((d) => d.kind === kind && d.id === id
 const first = (r) => r.data.results[0];
 
 // =============================================================================================
-// Gym lifecycle: sign up, wait for activation, readable code, platform admins
+// Gym lifecycle: sign up (live at once), readable code, platform admins, pending and active
 // =============================================================================================
 const signup = await call('POST', '/v1/gyms', { body: { gymName: `Iron Temple ${tag}`, ownerName: 'Asha Rao', email: `asha${tag}@example.com`, phone: phone(1), password: 'correct-horse-9' } });
-check('owner can sign up', signup.status === 201 && signup.data.gym?.status === 'pending', JSON.stringify(signup.data));
+check('owner can sign up and the gym is live at once', signup.status === 201 && signup.data.gym?.status === 'active', JSON.stringify(signup.data));
 const gymA = signup.data.gym;
 const ownerA = signup.data.token;
 check('gym code is short and readable', /^[A-Z]{2}\d{2,4}$/.test(gymA.code), gymA.code);
 check('the same email can’t open a second gym', (await call('POST', '/v1/gyms', { body: { gymName: 'Another One', ownerName: 'Asha', email: `ASHA${tag}@example.com`, password: 'correct-horse-9' } })).data.error === 'email_taken');
 check('a bad email is refused', (await call('POST', '/v1/gyms', { body: { gymName: 'Bad Mail', ownerName: 'Asha', email: 'not-an-email', password: 'correct-horse-9' } })).status === 400);
 check('weak password is rejected', (await call('POST', '/v1/gyms', { body: { gymName: 'X Gym', ownerName: 'Bob', email: `bob${tag}@example.com`, password: 'short' } })).status === 400);
-check('pending gym is invisible by code', (await call('GET', `/v1/gyms/${gymA.code}/public`)).status === 404);
-check('pending gym can’t sync yet', (await call('GET', '/v1/sync?since=0', { token: ownerA })).data.error === 'gym_pending');
+check('a new gym is visible by its code straight away', (await call('GET', `/v1/gyms/${gymA.code}/public`)).status === 200);
 
 const PROFILE = { contact: { phone: '+919811100000', phoneDisplay: '+91 98111 00000', whatsapp: '919811100000', email: 'hello@irontemple.test', instagram: '@irontemple' }, address: { line1: '12 MG Road', line2: 'Pune 411001', mapsQuery: 'MG Road Pune' }, hours: [{ label: 'Every day', days: [0, 1, 2, 3, 4, 5, 6], open: '05:30', close: '22:00' }], amenities: ['Lockers', 'Showers'], referral: { reward: 'Both of you get 10 extra days.' } };
-check('pending owner can set up branding and business details', (await call('PATCH', '/v1/gym', { token: ownerA, body: { tagline: 'Lift heavy', primaryColor: '#E4572E', features: { nutrition: false }, profile: PROFILE } })).status === 200);
+check('the owner can set up branding and business details', (await call('PATCH', '/v1/gym', { token: ownerA, body: { tagline: 'Lift heavy', primaryColor: '#E4572E', features: { nutrition: false }, profile: PROFILE } })).status === 200);
 const meA = await call('GET', '/v1/me', { token: ownerA });
 check('the owner reads their business details back', meA.data.gym?.profile?.address?.line1 === '12 MG Road' && meA.data.gym.profile.contact.instagram === 'irontemple' && meA.data.gym.profile.hours.length === 1, JSON.stringify(meA.data.gym?.profile).slice(0, 160));
 
@@ -71,6 +70,9 @@ check('a wrong admin password is refused', (await call('POST', '/v1/auth/owner-l
 check('an admin can’t create other admins', (await call('POST', '/v1/admin/accounts', { token: admin, body: { email: `x${tag}@g.test`, name: 'X Y', password: 'xxxxxxxx1' } })).status === 403);
 const listed = (await call('GET', '/v1/admin/gyms', { token: admin })).data.gyms ?? [];
 check('the admin sees every gym with its owner’s email', listed.some((g) => g.code === gymA.code && g.owner_email === `asha${tag}@example.com`));
+check('admin can hold a gym back as pending', (await call('POST', `/v1/admin/gyms/${gymA.id}/status`, { token: admin, body: { status: 'pending' } })).status === 200);
+check('pending gym is invisible by code', (await call('GET', `/v1/gyms/${gymA.code}/public`)).status === 404);
+check('pending gym can’t sync yet', (await call('GET', '/v1/sync?since=0', { token: ownerA })).data.error === 'gym_pending');
 check('admin activates the gym', (await call('POST', `/v1/admin/gyms/${gymA.id}/status`, { token: admin, body: { status: 'active' } })).status === 200);
 
 const ol = await call('POST', '/v1/auth/owner-login', { body: { email: `Asha${tag}@Example.com`, password: 'correct-horse-9' } });
@@ -130,7 +132,13 @@ check('staff issue a fresh invite', re.status === 200 && re.data.inviteCode !== 
 const ok = await redeem(re.data.inviteCode);
 check('the member signs in with the fresh code', ok.status === 200 && ok.data.role === 'member');
 const memberA1 = ok.data.token;
-check('an invite code works only once', (await redeem(re.data.inviteCode)).status === 401);
+check('the old code stopped working', (await redeem(m1.inviteCode)).status === 401);
+const memberLogin = (code, p = phone(101)) => call('POST', '/v1/auth/member-login', { body: { phone: p, code } });
+const again = await memberLogin(re.data.inviteCode);
+check('the code is the member’s login: phone and code alone sign in again, no gym code', again.status === 200 && again.data.memberId === m1.member.id && again.data.gym?.code === gymA.code, JSON.stringify(again.data).slice(0, 200));
+check('a wrong code with phone alone is refused', (await memberLogin(wrong)).status === 401);
+check('unknown phone looks the same on the phone-only login', (await memberLogin('123456', phone(998))).data.message === (await memberLogin(wrong)).data.message);
+check('a right code resets the wrong-try count', (await memberLogin(re.data.inviteCode)).status === 200);
 
 const pairMember = (await addMember(50)).data;
 const pair = await call('POST', '/v1/pair', { body: { gymCode: gymA.code, name: 'Member 50', phone: phone(150) } });

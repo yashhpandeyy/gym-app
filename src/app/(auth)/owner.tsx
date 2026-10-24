@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -13,7 +13,8 @@ type Mode = 'create' | 'signin';
 export default function Owner() {
   const joinRemote = useApp((st) => st.joinRemote);
   const joinAdmin = useApp((st) => st.joinAdmin);
-  const [mode, setMode] = useState<Mode>('create');
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [mode, setMode] = useState<Mode>(params.mode === 'signin' ? 'signin' : 'create');
   const [gymName, setGymName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [email, setEmail] = useState('');
@@ -98,7 +99,7 @@ export default function Owner() {
         <Button title={mode === 'create' ? 'Create my gym' : 'Sign in'} full loading={busy} disabled={!ready} onPress={mode === 'create' ? create : signIn} />
         {mode === 'create' ? (
           <Text variant="small" tone="soft">
-            Your gym stays private until we switch it on. You can set everything up while you wait.
+            Your gym goes live straight away. Add members from the app and each one gets a code to sign in with.
           </Text>
         ) : null}
       </View>

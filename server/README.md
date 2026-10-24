@@ -20,6 +20,17 @@ Secrets for local runs live in `.dev.vars` (copy `.dev.vars.example`). Never com
 
 Everything below is on Cloudflare's free tier. No credit card is needed for an account.
 
+### From GitHub, no computer needed
+
+`.github/workflows/deploy-api.yml` deploys on every push to `master` that touches `server/`, or when you press "Run workflow" in the Actions tab. It applies the D1 migrations, publishes the Worker and sets its secrets. Once:
+
+1. In the Cloudflare dashboard, create a D1 database named `gym-db` (Storage & Databases > D1) and copy its id.
+2. Create an API token (My Profile > API Tokens > Create Token > "Edit Cloudflare Workers" template, then add the permission Account > D1 > Edit).
+3. Add these repository secrets in GitHub (Settings > Secrets and variables > Actions): `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`, `APP_SECRET` and `ADMIN_TOKEN` (two long random strings, for example from `openssl rand -hex 32`).
+4. Run the workflow. The API is then at `https://gym-api.<your-subdomain>.workers.dev`.
+
+### From your computer
+
 ```bash
 npx wrangler login
 npx wrangler d1 create gym-db            # paste the printed database_id into wrangler.toml
@@ -30,7 +41,9 @@ npm run deploy
 API=https://your-worker.workers.dev ADMIN_TOKEN=... node scripts/make-admin.mjs you@gmail.com "Your Name" "a-strong-password"
 ```
 
-Then point the app at it with `EXPO_PUBLIC_API_URL`.
+Then point the app at it with `EXPO_PUBLIC_API_URL` (in a `.env` file at the repo root for `npx expo start`, or as an `env` entry in `eas.json` for builds).
+
+Owner sign-ups go live straight away. To review each new gym by hand before it works, set the Worker variable `SIGNUP_REVIEW` to `on`; new gyms then stay `pending` until an admin activates them.
 
 ## Why it costs nothing
 
@@ -69,7 +82,7 @@ The server also enforces what a phone can't be trusted with:
 - **Platform admins** (you) sign in with their own email and password on the same screen as owners (`POST /v1/auth/owner-login`). They create gyms that are live at once, open any gym as its owner to set it up, switch gyms on or off, and reset an owner's password.
 - **Owners** sign in with their email and password. The gym comes from the account, so no code is needed. The email is an identifier, not verified: an admin checks each gym by hand before it goes live.
 - **Staff** sign in with gym code, phone and PIN, so one shared front-desk phone works. The owner adds, removes and resets them.
-- **Members** have no password and no email requirement. The gym adds them and gets a one-time 6-digit invite to send on WhatsApp or read out. They enter gym code, phone and invite. Five wrong tries lock the invite; staff issue a fresh one.
+- **Members** have no password and no email requirement. The gym adds them and gets a 6-digit member code to send on WhatsApp or read out. On the first screen they enter just their phone and that code (`POST /v1/auth/member-login`); the gym code isn't needed. The code is their login and keeps working until the gym issues a new one, which retires the old one. Five wrong tries in a row lock it; staff issue a fresh one.
 - **Front-desk pairing** is the alternative: the member requests a `GYMPAIR:` QR, staff scan it, see who is asking, and confirm.
 
 The gym code (like `FK20`, built from the gym's initials) returns branding only and nothing else.
@@ -80,4 +93,4 @@ Tokens are random, stored hashed, and checked on every request. Owners and staff
 
 ## Gym lifecycle
 
-Owners can sign up themselves (`POST /v1/gyms`) and set up branding while the gym is `pending`. Nothing else works until an admin activates it. An admin can also create a gym that is already live. `suspended` cuts off every session at once.
+Owners can sign up themselves (`POST /v1/gyms`) and the gym is `active` at once. With `SIGNUP_REVIEW=on` it starts `pending` instead: the owner can set up branding, and nothing else works until an admin activates it. An admin can also create a gym that is already live. `suspended` cuts off every session at once.
