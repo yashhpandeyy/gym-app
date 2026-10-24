@@ -39,3 +39,13 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## This project
+
+White-label gym app. Read README.md first. Key rules:
+
+- Gym-specific values come from `src/config/brand.json` via `useTheme().brand` or `baseBrand`. Never hard-code a gym name, colour or contact detail in a screen.
+- Colours come from `useTheme().c` (derived from one brand colour in `src/theme/index.tsx`); style with `makeStyles`.
+- Business rules live in `src/lib/domain.ts` as pure functions; state changes go through actions in `src/store/index.ts`. Screens only compose the two.
+- Select zustand state one slice at a time (`useApp((s) => s.members)`); selectors that build new arrays or objects re-render forever.
+- Every route outside the tab groups must be listed in `src/app/_layout.tsx` so the member/manager guards cover it.

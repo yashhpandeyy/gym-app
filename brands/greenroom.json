@@ -1,0 +1,81 @@
+{
+  "id": "greenroom",
+  "name": "Greenroom Studio",
+  "shortName": "Greenroom",
+  "monogram": "GS",
+  "tagline": "Move well, every day.",
+  "slug": "greenroom-studio",
+  "ios": {
+    "bundleIdentifier": "com.dym.greenroom"
+  },
+  "android": {
+    "package": "com.dym.greenroom"
+  },
+  "easProjectId": "",
+  "colors": {
+    "primary": "#0E9F6E"
+  },
+  "currency": {
+    "code": "INR",
+    "locale": "en-IN",
+    "symbol": "₹"
+  },
+  "contact": {
+    "phone": "+918041234567",
+    "phoneDisplay": "+91 80412 34567",
+    "whatsapp": "918041234567",
+    "email": "hello@greenroomstudio.in",
+    "instagram": "greenroom.studio"
+  },
+  "address": {
+    "line1": "3rd floor, 12th Main, Indiranagar",
+    "line2": "Bengaluru, Karnataka 560038",
+    "mapsQuery": "12th Main Indiranagar Bengaluru"
+  },
+  "hours": [
+    {
+      "label": "Monday to Friday",
+      "days": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "open": "06:00",
+      "close": "21:30"
+    },
+    {
+      "label": "Weekends",
+      "days": [
+        0,
+        6
+      ],
+      "open": "07:00",
+      "close": "13:00"
+    }
+  ],
+  "amenities": [
+    "Yoga room",
+    "Reformer Pilates",
+    "Functional floor",
+    "Showers",
+    "Herbal tea bar"
+  ],
+  "features": {
+    "classes": true,
+    "trainers": true,
+    "progress": true,
+    "workouts": false,
+    "referrals": true,
+    "leads": true,
+    "gamification": true,
+    "guestPass": true,
+    "nutrition": true,
+    "mind": true
+  },
+  "referral": {
+    "reward": "Your friend's first week is free and you get 10 extra days."
+  },
+  "demo": true
+}

@@ -1,0 +1,82 @@
+{
+  "id": "ironclad",
+  "name": "Ironclad Fitness",
+  "shortName": "Ironclad",
+  "monogram": "IF",
+  "tagline": "Show up. Lift heavy. Repeat.",
+  "slug": "ironclad-fitness",
+  "ios": {
+    "bundleIdentifier": "com.dym.ironclad"
+  },
+  "android": {
+    "package": "com.dym.ironclad"
+  },
+  "easProjectId": "",
+  "colors": {
+    "primary": "#E5372B"
+  },
+  "currency": {
+    "code": "INR",
+    "locale": "en-IN",
+    "symbol": "₹"
+  },
+  "contact": {
+    "phone": "+919822012345",
+    "phoneDisplay": "+91 98220 12345",
+    "whatsapp": "919822012345",
+    "email": "team@ironcladfitness.in",
+    "instagram": "ironcladfitness"
+  },
+  "address": {
+    "line1": "Shop 4, Lane 6, Koregaon Park",
+    "line2": "Pune, Maharashtra 411001",
+    "mapsQuery": "Koregaon Park Lane 6 Pune"
+  },
+  "hours": [
+    {
+      "label": "Monday to Saturday",
+      "days": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "open": "05:00",
+      "close": "23:00"
+    },
+    {
+      "label": "Sunday",
+      "days": [
+        0
+      ],
+      "open": "07:00",
+      "close": "13:00"
+    }
+  ],
+  "amenities": [
+    "Powerlifting platforms",
+    "Strongman yard",
+    "Cardio zone",
+    "Lockers",
+    "Showers",
+    "Parking"
+  ],
+  "features": {
+    "classes": false,
+    "trainers": true,
+    "progress": true,
+    "workouts": true,
+    "referrals": true,
+    "leads": true,
+    "gamification": true,
+    "guestPass": true,
+    "nutrition": true,
+    "mind": true
+  },
+  "referral": {
+    "reward": "You both get a free month when your friend joins."
+  },
+  "demo": true
+}

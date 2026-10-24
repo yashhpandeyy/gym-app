@@ -1,0 +1,53 @@
+{
+  "id": "gym",
+  "name": "GYM",
+  "shortName": "GYM",
+  "monogram": "GY",
+  "tagline": "Your gym, in your pocket.",
+  "slug": "gym",
+  "ios": {
+    "bundleIdentifier": "com.dym.gym"
+  },
+  "android": {
+    "package": "com.dym.gym"
+  },
+  "easProjectId": "",
+  "colors": {
+    "primary": "#2F45FF"
+  },
+  "currency": {
+    "code": "INR",
+    "locale": "en-IN",
+    "symbol": "₹"
+  },
+  "contact": {
+    "phone": "",
+    "phoneDisplay": "",
+    "whatsapp": "",
+    "email": "",
+    "instagram": ""
+  },
+  "address": {
+    "line1": "",
+    "line2": "",
+    "mapsQuery": ""
+  },
+  "hours": [],
+  "amenities": [],
+  "features": {
+    "classes": true,
+    "trainers": true,
+    "progress": true,
+    "workouts": true,
+    "referrals": true,
+    "leads": true,
+    "gamification": true,
+    "guestPass": true,
+    "nutrition": true,
+    "mind": true
+  },
+  "referral": {
+    "reward": ""
+  },
+  "demo": false
+}

@@ -1,0 +1,84 @@
+{
+  "id": "northside",
+  "name": "Northside Barbell",
+  "shortName": "Northside",
+  "monogram": "NB",
+  "tagline": "Lift with your people.",
+  "slug": "northside-barbell",
+  "ios": {
+    "bundleIdentifier": "com.dym.northside"
+  },
+  "android": {
+    "package": "com.dym.northside"
+  },
+  "easProjectId": "",
+  "colors": {
+    "primary": "#2F45FF"
+  },
+  "currency": {
+    "code": "INR",
+    "locale": "en-IN",
+    "symbol": "₹"
+  },
+  "contact": {
+    "phone": "+919876543210",
+    "phoneDisplay": "+91 98765 43210",
+    "whatsapp": "919876543210",
+    "email": "hello@northsidebarbell.in",
+    "instagram": "northsidebarbell"
+  },
+  "address": {
+    "line1": "Plot 14, Sector 29",
+    "line2": "Gurugram, Haryana 122001",
+    "mapsQuery": "Sector 29 Gurugram"
+  },
+  "hours": [
+    {
+      "label": "Monday to Saturday",
+      "days": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "open": "05:30",
+      "close": "22:30"
+    },
+    {
+      "label": "Sunday",
+      "days": [
+        0
+      ],
+      "open": "07:00",
+      "close": "13:00"
+    }
+  ],
+  "amenities": [
+    "Strength floor",
+    "Cardio deck",
+    "Turf lane",
+    "Steam room",
+    "Lockers",
+    "Showers",
+    "Parking",
+    "Protein bar"
+  ],
+  "features": {
+    "classes": true,
+    "trainers": true,
+    "progress": true,
+    "workouts": true,
+    "referrals": true,
+    "leads": true,
+    "gamification": true,
+    "guestPass": true,
+    "nutrition": true,
+    "mind": true
+  },
+  "referral": {
+    "reward": "You both get 15 extra days when your friend joins."
+  },
+  "demo": true
+}

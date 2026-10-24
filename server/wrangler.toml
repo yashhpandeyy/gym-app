@@ -1,0 +1,11 @@
+name = "gym-api"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# Replace database_id with the id printed by `wrangler d1 create gym-db` when you deploy.
+# Local development ignores it.
+[[d1_databases]]
+binding = "DB"
+database_name = "gym-db"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
