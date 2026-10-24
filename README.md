@@ -32,11 +32,11 @@ cd ..
 npx expo start            # scan the QR with Expo Go
 ```
 
-Then open the app, tap **I run a gym**, sign in with the admin email you just made, and create your first gym.
+Then open the app, tap **Register your gym** at the bottom and create your first gym. Members sign in on the first screen with their number and the code the gym gives them.
 
 To fill a gym with realistic starter records for trying things out, run `node server/test/seed-demo.mjs` (it uses the real API, exactly like an owner would, and prints the logins).
 
-`EXPO_PUBLIC_API_URL` points the app at a deployed server. In development it finds the server on the same computer as Expo.
+The live API runs on Cloudflare at https://gym-api.ypandey.workers.dev. `.env` and `eas.json` point the app there through `EXPO_PUBLIC_API_URL`. To use the local server from step 1 instead, put `EXPO_PUBLIC_API_URL=http://<your-computer's-ip>:8787` in `.env.local`.
 
 ## Where things live
 
