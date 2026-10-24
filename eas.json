@@ -6,10 +6,18 @@
   "build": {
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://gym-api.ypandey.workers.dev"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://gym-api.ypandey.workers.dev"
+      }
     }
   },
   "submit": {

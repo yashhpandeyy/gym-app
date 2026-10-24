@@ -6,9 +6,9 @@ import { Platform } from 'react-native';
 import type { Hours } from '@/config/brand';
 
 /**
- * Talks to the gym server in /server. In development the server runs on the same computer as
- * Expo, so the phone reaches it at the Expo host's address on port 8787. Set
- * EXPO_PUBLIC_API_URL for a deployed server.
+ * Talks to the gym server in /server. EXPO_PUBLIC_API_URL (set in .env and eas.json) points at
+ * the live server on Cloudflare. Without it, the phone reaches a server on the same computer as
+ * Expo, at the Expo host's address on port 8787.
  */
 export function apiBase() {
   const env = process.env.EXPO_PUBLIC_API_URL;
