@@ -195,10 +195,10 @@ export default function MemberDetail() {
       <SectionHeader title="App access" />
       <Card style={{ gap: 10 }}>
         <Text variant="small" tone="soft">
-          They open the app with a one-time code. If {firstName(m.name)} lost it or got a new phone, send a fresh one. The old one stops working.
+          They sign in with their number and a member code. If {firstName(m.name)} lost it, send a fresh one. The old one stops working.
         </Text>
         <Button
-          title="Send a new invite code"
+          title="Send a new member code"
           icon="logo-whatsapp"
           size="md"
           variant="outline"
@@ -318,8 +318,8 @@ export default function MemberDetail() {
       <Sheet
         visible={!!invite}
         onClose={() => setInvite(null)}
-        title="New invite code"
-        subtitle={`For ${m.name}. It works once and for ${invite?.expiresInDays ?? 7} days.`}
+        title="New member code"
+        subtitle={`For ${m.name}. It’s their login until you send a new one.`}
         footer={
           invite ? (
             <>
@@ -330,7 +330,7 @@ export default function MemberDetail() {
         }>
         <Card style={{ alignItems: 'center', gap: 4, paddingVertical: 20 }}>
           <Text variant="caption" tone="soft">
-            Invite code
+            Member code
           </Text>
           <Text variant="hero">{invite?.inviteCode}</Text>
         </Card>

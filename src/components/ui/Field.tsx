@@ -194,9 +194,11 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.c.surface,
   },
   stepValue: { minWidth: 52, textAlign: 'center' },
-  codeRow: { flexDirection: 'row', gap: 12 },
+  codeRow: { flexDirection: 'row', gap: 10 },
   codeBox: {
-    width: 58,
+    // Shrinks to fit narrow screens and cards; never wider than the original 58.
+    flex: 1,
+    maxWidth: 58,
     height: 66,
     borderRadius: t.radius.md,
     borderWidth: 1.5,

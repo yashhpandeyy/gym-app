@@ -45,7 +45,10 @@ registerSync(app);
 
 app.get('/health', (c) => c.json({ ok: true }));
 
-/** Owner self-serve sign-up. The gym stays pending until the platform owner activates it. */
+/**
+ * Owner self-serve sign-up. The gym is live at once, unless SIGNUP_REVIEW is "on": then it stays
+ * pending until a platform admin activates it.
+ */
 app.post('/v1/gyms', async (c) => {
   const key = `signup:${ip(c)}`;
   if (await blocked(c.env.DB, key, 5, 3600)) return fail(c, 429, 'too_many', 'Too many sign-ups from here. Try again later.');
@@ -53,9 +56,10 @@ app.post('/v1/gyms', async (c) => {
   if (!f) return fail(c, 400, 'invalid', 'Enter the gym name, your name, a valid email and a password of 8 or more characters.');
   if (await emailTaken(c.env.DB, f.email)) return fail(c, 409, 'email_taken', 'That email already runs a gym. Sign in instead.');
   await recordFail(c.env.DB, key, 3600);
-  const g = await createGym(c.env.DB, { ...f, status: 'pending' }, c.env.APP_SECRET);
+  const status = c.env.SIGNUP_REVIEW === 'on' ? 'pending' : 'active';
+  const g = await createGym(c.env.DB, { ...f, status }, c.env.APP_SECRET);
   const token = await issueSession(c.env.DB, { gymId: g.gymId, role: 'owner', userId: g.userId });
-  return c.json({ gym: { id: g.gymId, code: g.code, status: 'pending' }, token }, 201);
+  return c.json({ gym: { id: g.gymId, code: g.code, status }, token }, 201);
 });
 
 /** Branding for the gym-code screen. Pending and unknown codes look identical. */
@@ -134,7 +138,51 @@ app.post('/v1/auth/logout', async (c) => {
   return c.json({ ok: true });
 });
 
-/** A member enters their phone and the 6-digit code the owner sent over WhatsApp. */
+type CodeRow = { member_id: string; name: string; gym_id: string; invite_id: string; salt: string; code_hash: string; attempts: number; expires_at: number };
+
+/**
+ * Checks a member's 6-digit login code against every live code their phone has (one per gym they
+ * belong to). The code is the member's login: it keeps working until the gym issues a new one.
+ * Five wrong tries lock it; the gym then sends a fresh one.
+ */
+async function memberSignIn(c: Ctx, rows: CodeRow[], code: string, keys: string[]) {
+  const bad = async () => {
+    await Promise.all(keys.map((k) => recordFail(c.env.DB, k, 900)));
+    return fail(c, 401, 'invalid_code', 'That number and code don’t match. Check them, or ask your gym for a new code.');
+  };
+  const live = rows.filter((r) => r.attempts < 5 && r.expires_at >= nowSec());
+  // Always do at least one hash, so an unknown phone and a wrong code take the same time.
+  const hashes = await Promise.all((live.length ? live : [null]).map((r) => hmacCode(c.env.APP_SECRET, r?.salt ?? 'none', code)));
+  const hit = live.find((r, i) => safeEqual(hashes[i], r.code_hash));
+  if (!/^\d{6}$/.test(code) || !hit) {
+    if (live.length) await c.env.DB.batch(live.map((r) => c.env.DB.prepare('UPDATE invites SET attempts = attempts + 1 WHERE id = ?').bind(r.invite_id)));
+    return bad();
+  }
+  await c.env.DB.prepare('UPDATE invites SET attempts = 0 WHERE id = ?').bind(hit.invite_id).run();
+  await clearFails(c.env.DB, keys[0]);
+  const token = await issueSession(c.env.DB, { gymId: hit.gym_id, role: 'member', memberId: hit.member_id });
+  const g = await c.env.DB.prepare('SELECT * FROM gyms WHERE id = ?').bind(hit.gym_id).first<GymRow>();
+  return c.json({ token, role: 'member', name: hit.name, memberId: hit.member_id, gym: g && fullGym(g) });
+}
+
+const CODE_ROWS = `SELECT m.id AS member_id, m.name, m.gym_id, i.id AS invite_id, i.salt, i.code_hash, i.attempts, i.expires_at
+  FROM members m JOIN gyms g ON g.id = m.gym_id JOIN invites i ON i.member_id = m.id AND i.used_at IS NULL
+  WHERE g.status = 'active' AND m.phone = ?`;
+
+/** The first screen: a member signs in with just their phone and the code their gym gave them. */
+app.post('/v1/auth/member-login', async (c) => {
+  const b = await body(c);
+  const phone = phoneOf(b.phone);
+  const code = typeof b.code === 'string' ? b.code.replace(/\D/g, '') : '';
+  const keys = [`member:${phone}`, `member-ip:${ip(c)}`];
+  if ((await blocked(c.env.DB, keys[0], 10, 900)) || (await blocked(c.env.DB, keys[1], 40, 900))) {
+    return fail(c, 429, 'too_many', 'Too many tries. Wait 15 minutes, or ask your gym for a new code.');
+  }
+  const rows = phone ? (await c.env.DB.prepare(`${CODE_ROWS} LIMIT 10`).bind(phone).all<CodeRow>()).results : [];
+  return memberSignIn(c, rows, code, keys);
+});
+
+/** The same sign-in, from the gym-code screen, limited to that one gym. */
 app.post('/v1/auth/redeem', async (c) => {
   const b = await body(c);
   const phone = phoneOf(b.phone);
@@ -144,29 +192,8 @@ app.post('/v1/auth/redeem', async (c) => {
   if ((await blocked(c.env.DB, keys[0], 10, 900)) || (await blocked(c.env.DB, keys[1], 40, 900))) {
     return fail(c, 429, 'too_many', 'Too many tries. Wait 15 minutes, or ask the front desk for a new code.');
   }
-  const bad = async () => {
-    await Promise.all(keys.map((k) => recordFail(c.env.DB, k, 900)));
-    return fail(c, 401, 'invalid_code', 'That code didn’t work. Check it, or ask the front desk for a new one.');
-  };
-
-  const g = await gymByCode(c.env.DB, gCode);
-  const member = g?.status === 'active' && phone ? await c.env.DB.prepare('SELECT id, name FROM members WHERE gym_id = ? AND phone = ?').bind(g.id, phone).first<{ id: string; name: string }>() : null;
-  const invite = member
-    ? await c.env.DB.prepare('SELECT id, salt, code_hash, attempts, expires_at FROM invites WHERE member_id = ? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1').bind(member.id).first<{ id: string; salt: string; code_hash: string; attempts: number; expires_at: number }>()
-    : null;
-
-  // Always do the same work, so an unknown phone and a wrong code are indistinguishable.
-  const candidate = await hmacCode(c.env.APP_SECRET, invite?.salt ?? 'none', code);
-  if (!g || !member || !invite || invite.attempts >= 5 || invite.expires_at < nowSec()) return bad();
-  if (!safeEqual(candidate, invite.code_hash)) {
-    await c.env.DB.prepare('UPDATE invites SET attempts = attempts + 1 WHERE id = ?').bind(invite.id).run();
-    return bad();
-  }
-  const used = await c.env.DB.prepare('UPDATE invites SET used_at = ? WHERE id = ? AND used_at IS NULL').bind(nowSec(), invite.id).run();
-  if (used.meta.changes !== 1) return bad();
-  await clearFails(c.env.DB, keys[0]);
-  const token = await issueSession(c.env.DB, { gymId: g.id, role: 'member', memberId: member.id });
-  return c.json({ token, role: 'member', name: member.name, memberId: member.id });
+  const rows = phone ? (await c.env.DB.prepare(`${CODE_ROWS} AND g.code = ?`).bind(phone, gCode).all<CodeRow>()).results : [];
+  return memberSignIn(c, rows, code, keys);
 });
 
 /** A member without an invite asks to join. Staff approve it at the desk by scanning the QR. */
@@ -296,6 +323,9 @@ app.patch('/v1/staff/:id', ownerOnly, async (c) => {
   return c.json({ ok: true });
 });
 
+/** Member login codes don't expire on their own. Issuing a new one retires the old one. */
+const CODE_DAYS = 3650;
+
 async function prepareInvite(c: Ctx, gymId: string, memberId: string) {
   const code = randomDigits(6);
   const salt = randomToken(8);
@@ -309,7 +339,7 @@ async function prepareInvite(c: Ctx, gymId: string, memberId: string) {
         memberId,
         salt,
         await hmacCode(c.env.APP_SECRET, salt, code),
-        nowSec() + 7 * 86400,
+        nowSec() + CODE_DAYS * 86400,
         nowIso(),
       ),
     ],
@@ -326,10 +356,10 @@ async function inviteReply(c: Ctx, gymId: string, member: { id: string; name: st
   const g = await c.env.DB.prepare('SELECT code, name FROM gyms WHERE id = ?').bind(gymId).first<{ code: string; name: string }>();
   return {
     inviteCode: code,
-    expiresInDays: 7,
+    expiresInDays: CODE_DAYS,
     whatsapp: {
       phone: member.phone,
-      text: `Hi ${member.name}, welcome to ${g?.name}! Open the GYM app, enter gym code ${g?.code}, then your phone number and this invite code: ${code}. The code works for 7 days.`,
+      text: `Hi ${member.name}, welcome to ${g?.name}! Open the GYM app and sign in with your phone number and this code: ${code}. Keep it: it's your login.`,
     },
   };
 }
@@ -368,7 +398,7 @@ app.post('/v1/members', staffOnly, async (c) => {
   return c.json({ member: doc, ...(await inviteReply(c, s.gymId, { id, name, phone }, invite.code)) }, 201);
 });
 
-/** A fresh invite when the old one expired or locked. */
+/** A fresh login code when the member lost theirs or it locked. The old one stops working. */
 app.post('/v1/members/:id/invite', staffOnly, async (c) => {
   const s = c.get('s');
   const m = await c.env.DB.prepare('SELECT id, name, phone FROM members WHERE id = ? AND gym_id = ?').bind(c.req.param('id'), s.gymId).first<{ id: string; name: string; phone: string }>();

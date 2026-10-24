@@ -3,7 +3,7 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { DEFAULT_PLANS, DEFAULT_SETTINGS } from './defaults';
 import { hashSecret, hmacCode, newId, randomToken, safeEqual, sha256 } from './crypto';
 
-export type Env = { DB: D1Database; ADMIN_TOKEN: string; APP_SECRET: string };
+export type Env = { DB: D1Database; ADMIN_TOKEN: string; APP_SECRET: string; SIGNUP_REVIEW?: string };
 export type Role = 'owner' | 'staff' | 'member';
 export type Sess = { gymId: string; role: Role; userId: string | null; memberId: string | null };
 export type AppEnv = { Bindings: Env; Variables: { s: Sess; admin: { id: string | null; master: boolean } } };
