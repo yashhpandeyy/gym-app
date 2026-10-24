@@ -22,7 +22,7 @@ Everything below is on Cloudflare's free tier. No credit card is needed for an a
 
 ### From GitHub, no computer needed
 
-`.github/workflows/deploy-api.yml` deploys on every push to `main` that touches `server/`, or when you press "Run workflow" in the Actions tab. It applies the D1 migrations, publishes the Worker and sets its secrets. Once:
+`.github/workflows/deploy-api.yml` deploys on every push to `master` that touches `server/`, or when you press "Run workflow" in the Actions tab. It applies the D1 migrations, publishes the Worker and sets its secrets. Once:
 
 1. In the Cloudflare dashboard, create a D1 database named `gym-db` (Storage & Databases > D1) and copy its id.
 2. Create an API token (My Profile > API Tokens > Create Token > "Edit Cloudflare Workers" template, then add the permission Account > D1 > Edit).

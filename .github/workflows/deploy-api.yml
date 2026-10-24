@@ -1,5 +1,5 @@
 # Deploys the API in /server to your Cloudflare account: applies database migrations to D1,
-# publishes the Worker and sets its secrets. Runs on every push to main that touches /server,
+# publishes the Worker and sets its secrets. Runs on every push to master that touches /server,
 # and on demand from the Actions tab ("Run workflow").
 #
 # Repository secrets it needs (Settings > Secrets and variables > Actions):
@@ -12,7 +12,7 @@ name: Deploy API
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths: ['server/**', '.github/workflows/deploy-api.yml']
   workflow_dispatch:
 
