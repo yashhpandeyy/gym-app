@@ -85,6 +85,12 @@ export function whatsapp(phone: string, text: string) {
   open(`whatsapp://send?phone=${digits}&text=${msg}`, `https://wa.me/${digits}?text=${msg}`);
 }
 
+/** Opens WhatsApp's own chooser so the person picks who to send the text to. */
+export function whatsappShare(text: string) {
+  const msg = encodeURIComponent(text);
+  open(`whatsapp://send?text=${msg}`, `https://wa.me/?text=${msg}`);
+}
+
 export function email(to: string, subject: string) {
   open(`mailto:${to}?subject=${encodeURIComponent(subject)}`);
 }

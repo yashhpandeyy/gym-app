@@ -188,7 +188,7 @@ export default function Leaderboards() {
 }
 
 const useStyles = makeStyles((t) => ({
-  chipScroll: { marginHorizontal: -gutter, flexGrow: 0 },
+  chipScroll: { marginHorizontal: -gutter, flexGrow: 0, flexShrink: 0 },
   chips: { paddingHorizontal: gutter, gap: 8, paddingVertical: 10 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, overflow: 'hidden' },
   bigRank: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },

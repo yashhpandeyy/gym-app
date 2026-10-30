@@ -340,7 +340,7 @@ export default function Home() {
 
 const useStyles = makeStyles((t) => ({
   greeting: { marginTop: 4, marginBottom: 20, gap: 4 },
-  awardScroll: { marginHorizontal: -gutter, flexGrow: 0 },
+  awardScroll: { marginHorizontal: -gutter, flexGrow: 0, flexShrink: 0 },
   awardRow: { paddingHorizontal: gutter, gap: 10, paddingVertical: 4 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   timeRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },

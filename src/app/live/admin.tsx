@@ -2,9 +2,11 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
+import { platform } from '@/config/platform';
 import { Button, Card, Empty, IconButton, Input, Pill, Screen, Sheet, Text, toast } from '@/components/ui';
 import { api, type AdminGym, type GymStatus } from '@/lib/api';
 import { fmtDate } from '@/lib/date';
+import { whatsappShare } from '@/lib/native';
 import { openGymAsOwner, signOut } from '@/lib/remote';
 import { useApp } from '@/store';
 import { makeStyles } from '@/theme';
@@ -119,6 +121,8 @@ export default function Admin() {
       <Sheet visible={!!selected} onClose={() => setSelected(null)} title={selected?.name ?? ''} subtitle={selected ? `Code ${selected.code}, ${selected.owner_email ?? ''}` : undefined}>
         {selected ? (
           <View style={{ gap: 12 }}>
+            <Button title="Send dashboard link on WhatsApp" icon="logo-whatsapp" variant="outline" onPress={() => whatsappShare(`${selected.name} dashboard for computer: ${platform.dashboardUrl}
+Sign in with ${selected.owner_email ?? 'your owner email'}`)} full />
             <Button title="Open it as the owner" icon="color-palette-outline" loading={busy} onPress={() => open(selected)} full />
             {selected.status !== 'active' ? (
               <Button title="Switch on" variant="soft" loading={busy} onPress={() => setStatus(selected, 'active')} full />

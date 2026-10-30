@@ -59,7 +59,7 @@ export function DateStrip({
 }
 
 const useStyles = makeStyles((t) => ({
-  scroll: { marginHorizontal: -gutter, flexGrow: 0 },
+  scroll: { marginHorizontal: -gutter, flexGrow: 0, flexShrink: 0 },
   row: { paddingHorizontal: gutter, gap: 8 },
   cell: {
     width: 58,
