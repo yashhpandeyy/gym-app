@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 
 import { haptic } from '@/lib/native';
@@ -62,7 +62,7 @@ export function Button({
     outline: c.lineStrong,
   };
   const edgeColor = edges[variant];
-  const chunk = edgeColor ? (size === 'sm' ? 3 : 4) : 0;
+  const chunk = edgeColor && Platform.OS !== 'web' ? (size === 'sm' ? 3 : 4) : 0;
   const { backgroundColor: bgOverride, ...outer } = (StyleSheet.flatten(style) ?? {}) as ViewStyle;
   const bg = (bgOverride as string | undefined) ?? p.bg;
   const reduced = useReducedMotion();

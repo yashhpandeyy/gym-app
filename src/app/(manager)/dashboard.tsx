@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { BrandLockup } from '@/components/Brand';
 import { BarChart } from '@/components/Charts';
 import { CrowdMeter, SpotMeter } from '@/components/Meters';
+import { useWideWeb } from '@/components/web/WebShell';
 import {
   Avatar,
   Button,
@@ -81,6 +82,8 @@ export default function Dashboard() {
     { show: newLeads > 0, icon: 'person-add-outline' as const, title: 'New enquiries', subtitle: 'Walk-ins and Instagram leads to call', value: String(newLeads), go: () => router.push('/manage/leads') },
   ].filter((a) => a.show);
 
+  const wide = useWideWeb();
+
   const remind = (name: string, phone: string, plan: string, end: string) =>
     whatsapp(
       phone,
@@ -99,6 +102,125 @@ export default function Dashboard() {
         </Text>
       </View>
 
+      {wide ? (
+        <View style={s.cols}>
+          <View style={s.colMain}>
+      <Card style={{ gap: 16 }}>
+        <CrowdMeter ratio={crowd.ratio} level={crowd.level} inside={crowd.inside} closedNote={nextOpening(now.date, now.mins)} />
+        <Divider />
+        <View style={s.facts}>
+          <Fact label="Checked in" value={String(inToday)} />
+          <Fact
+            label={`vs last ${WEEKDAYS_LONG[weekday(now.date)].slice(0, 3)}`}
+            value={`${diff >= 0 ? '+' : '−'}${Math.abs(diff)}`}
+            tone={diff >= 0 ? 'success' : 'danger'}
+          />
+          <Fact label="Booked today" value={String(bookedToday)} />
+        </View>
+      </Card>
+
+      <SectionHeader title="Needs you" />
+      {attention.length ? (
+        <Group>
+          {attention.map((a) => (
+            <Row key={a.title} icon={a.icon} title={a.title} subtitle={a.subtitle} value={a.value} valueTone="ink" onPress={a.go} />
+          ))}
+        </Group>
+      ) : (
+        <Card>
+          <Text variant="label">All clear</Text>
+          <Text variant="small" tone="soft">
+            No requests, complaints or dues waiting. Nice.
+          </Text>
+        </Card>
+      )}
+
+      <SectionHeader title="Today’s slots" action="Manage slots" onAction={() => router.push('/slots')} />
+      <Card style={{ gap: 14 }}>
+        {todaysSlots.length ? (
+          todaysSlots.map(({ slot, st }) => (
+            <View key={slot.id} style={[s.slotRow, st.over && { opacity: 0.45 }]}>
+              <Text variant="smallStrong" style={s.slotTime} numberOfLines={1}>
+                {fmtClockRange(slot.start, slot.end)}
+              </Text>
+              <View style={{ flex: 1 }}>
+                {st.closure ? (
+                  <Text variant="caption" tone="faint">
+                    Closed, {st.closure.reason.toLowerCase()}
+                  </Text>
+                ) : (
+                  <SpotMeter count={st.count} capacity={st.capacity} level={st.level} height={7} />
+                )}
+              </View>
+              <Text variant="smallStrong" tone="soft" style={s.slotCount}>
+                {st.count}/{st.capacity}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <Text variant="small" tone="soft">
+            No slots today.
+          </Text>
+        )}
+      </Card>
+
+          </View>
+          <View style={s.colSide}>
+      <SectionHeader title="Money" action="Payments" onAction={() => router.push('/manage/payments')} />
+      <Card style={{ gap: 16 }}>
+        <View>
+          <Text variant="small" tone="soft">
+            Collected in {MONTHS_LONG[parts(now.date).m]}
+          </Text>
+          <Text variant="display">{money(thisMonth.total)}</Text>
+          <Text variant="small" tone={thisMonth.total >= lastMonth.total ? 'success' : 'soft'}>
+            {thisMonth.total >= lastMonth.total
+              ? `Already ${money(thisMonth.total - lastMonth.total)} more than ${lastMonth.label}`
+              : `${money(lastMonth.total - thisMonth.total)} behind ${lastMonth.label} so far`}
+          </Text>
+        </View>
+        <BarChart
+          data={revenue.map((r, i) => ({ label: r.label, value: r.total, highlight: i === revenue.length - 1 }))}
+          format={(v) => money(v, { compact: true })}
+        />
+      </Card>
+
+      <Card style={[s.facts, { marginTop: 12 }]}>
+        <Fact label="Active members" value={String(active)} />
+        <Fact label="Paused" value={String(paused)} tone="ice" />
+        <Fact label="Joined this month" value={String(joinedThisMonth)} />
+      </Card>
+
+      {ending.length ? (
+        <>
+          <SectionHeader title="Ending soon" action="See all" onAction={() => router.push({ pathname: '/members', params: { filter: 'ending' } })} />
+          <Group>
+            {ending.slice(0, 5).map(({ m, info }) => (
+              <Row
+                key={m.id}
+                leading={<Avatar name={m.name} size={36} />}
+                title={m.name}
+                subtitle={`${info.plan?.name ?? 'Plan'} ends ${fmtRelativeInline(info.end, now.date)}`}
+                chevron={false}
+                onPress={() => router.push(`/manage/member/${m.id}`)}
+                action={
+                  <Button
+                    title="Remind"
+                    icon="logo-whatsapp"
+                    size="sm"
+                    variant="soft"
+                    onPress={() => remind(m.name, m.phone, info.plan?.name ?? '', info.end)}
+                  />
+                }
+              />
+            ))}
+          </Group>
+        </>
+      ) : null}
+          </View>
+        </View>
+      ) : (
+        <>
       <Card style={{ gap: 16 }}>
         <CrowdMeter ratio={crowd.ratio} level={crowd.level} inside={crowd.inside} closedNote={nextOpening(now.date, now.mins)} />
         <Divider />
@@ -209,12 +331,18 @@ export default function Dashboard() {
           </Group>
         </>
       ) : null}
+        </>
+      )}
     </Screen>
   );
 }
 
 const useStyles = makeStyles(() => ({
   head: { marginTop: 4, marginBottom: 20, gap: 4 },
+  cols: { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
+  colMain: { flex: 3, minWidth: 0 },
+  // The side column's first heading carries the same top margin as every section; pull it level with the first card.
+  colSide: { flex: 2, minWidth: 0, marginTop: -30 },
   facts: { flexDirection: 'row', justifyContent: 'space-between' },
   slotRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   slotTime: { width: 118 },

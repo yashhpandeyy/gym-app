@@ -1,11 +1,13 @@
 import { Tabs } from 'expo-router/js-tabs';
 
 import { TabBar, type TabItem } from '@/components/TabBar';
+import { useWideWeb } from '@/components/web/WebShell';
 import { useApp } from '@/store';
 import { useTheme } from '@/theme';
 
 export default function ManagerTabs() {
   const { c } = useTheme();
+  const sidebar = useWideWeb();
   const pendingPauses = useApp((s) => s.pauses.filter((p) => p.status === 'pending').length);
   const pendingCoach = useApp((s) => s.ptRequests.filter((r) => r.status === 'pending').length);
   const openTickets = useApp((s) => s.tickets.filter((t) => t.status === 'open').length);
@@ -20,7 +22,7 @@ export default function ManagerTabs() {
 
   return (
     <Tabs
-      tabBar={(props) => <TabBar {...props} items={items} />}
+      tabBar={(props) => (sidebar ? null : <TabBar {...props} items={items} />)}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: c.bg } }}>
       <Tabs.Screen name="dashboard" />
       <Tabs.Screen name="members" />

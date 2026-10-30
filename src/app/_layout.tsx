@@ -4,16 +4,25 @@ import {
   BigShouldersDisplay_800ExtraBold,
   BigShouldersDisplay_900Black,
 } from '@expo-google-fonts/big-shoulders-display';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationTheme, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useMemo } from 'react';
+import { Platform } from 'react-native';
 
 import { Launch } from '@/components/Launch';
 import { CelebrationHost } from '@/components/fun/Celebration';
 import { SyncGate } from '@/components/SyncGate';
+import { WebShell } from '@/components/web/WebShell';
 import { ToastHost } from '@/components/ui';
 import '@/lib/remote';
 import { setSoundEnabled } from '@/lib/sound';
@@ -49,15 +58,20 @@ const MANAGER_SCREENS = ['member/[id]', 'requests', 'payments', 'plans', 'leads'
 const MANAGER_MODALS = ['add-member'];
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    BigShouldersDisplay_700Bold,
-    BigShouldersDisplay_800ExtraBold,
-    BigShouldersDisplay_900Black,
-    Barlow_400Regular,
-    Barlow_500Medium,
-    Barlow_600SemiBold,
-    Barlow_700Bold,
-  });
+  // The website reads in Inter; the phone app keeps its own faces.
+  const [fontsLoaded, fontError] = useFonts(
+    Platform.OS === 'web'
+      ? { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold }
+      : {
+          BigShouldersDisplay_700Bold,
+          BigShouldersDisplay_800ExtraBold,
+          BigShouldersDisplay_900Black,
+          Barlow_400Regular,
+          Barlow_500Medium,
+          Barlow_600SemiBold,
+          Barlow_700Bold,
+        },
+  );
   const hydrated = useApp((s) => s.hydrated);
   const ready = (fontsLoaded || !!fontError) && hydrated;
 
@@ -123,6 +137,7 @@ function RootNavigator() {
   return (
     <NavigationTheme value={navTheme}>
       <StatusBar style={t.scheme === 'dark' ? 'light' : 'dark'} />
+      <WebShell>
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: t.c.bg } }}>
         <Stack.Screen name="index" />
         <Stack.Protected guard={!session}>
@@ -152,6 +167,7 @@ function RootNavigator() {
           <Stack.Screen name="live/admin-create" options={{ presentation: 'modal' }} />
         </Stack.Protected>
       </Stack>
+      </WebShell>
       <CelebrationHost />
       <SyncGate />
       <ToastHost />

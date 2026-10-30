@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { StyleSheet, useColorScheme, type TextStyle } from 'react-native';
+import { Platform, StyleSheet, useColorScheme, type TextStyle } from 'react-native';
 
 import { applyBrandOverride, baseBrand, type Brand } from '@/config/brand';
 import { useApp } from '@/store';
@@ -78,21 +78,42 @@ function buildPalette(brandPrimary: string, scheme: Scheme) {
 
 export type Palette = ReturnType<typeof buildPalette>;
 
-export const fonts = {
-  displayHeavy: 'BigShouldersDisplay_900Black',
-  display: 'BigShouldersDisplay_800ExtraBold',
-  displayBold: 'BigShouldersDisplay_700Bold',
-  body: 'Barlow_400Regular',
-  medium: 'Barlow_500Medium',
-  semibold: 'Barlow_600SemiBold',
-  bold: 'Barlow_700Bold',
-} as const;
+const isWeb = Platform.OS === 'web';
+
+/** The phone app uses Big Shoulders and Barlow. The website uses Inter, the face most sites and dashboards read in. */
+export const fonts = (isWeb
+  ? {
+      displayHeavy: 'Inter_800ExtraBold',
+      display: 'Inter_700Bold',
+      displayBold: 'Inter_600SemiBold',
+      body: 'Inter_400Regular',
+      medium: 'Inter_500Medium',
+      semibold: 'Inter_600SemiBold',
+      bold: 'Inter_700Bold',
+    }
+  : {
+      displayHeavy: 'BigShouldersDisplay_900Black',
+      display: 'BigShouldersDisplay_800ExtraBold',
+      displayBold: 'BigShouldersDisplay_700Bold',
+      body: 'Barlow_400Regular',
+      medium: 'Barlow_500Medium',
+      semibold: 'Barlow_600SemiBold',
+      bold: 'Barlow_700Bold',
+    }) as {
+  displayHeavy: string;
+  display: string;
+  displayBold: string;
+  body: string;
+  medium: string;
+  semibold: string;
+  bold: string;
+};
 
 /**
  * Big Shoulders is a condensed display face cut from Chicago's industrial signage.
  * It carries the numbers members care about (days left, times, spots). Barlow handles reading.
  */
-export const type = {
+const phoneType = {
   hero: { fontFamily: fonts.displayHeavy, fontSize: 88, lineHeight: 88, letterSpacing: -1 },
   display: { fontFamily: fonts.displayHeavy, fontSize: 56, lineHeight: 58, letterSpacing: -0.5 },
   title: { fontFamily: fonts.display, fontSize: 38, lineHeight: 42, letterSpacing: -0.2 },
@@ -108,7 +129,26 @@ export const type = {
   micro: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
 } satisfies Record<string, TextStyle>;
 
-export type TypeVariant = keyof typeof type;
+/** Smaller, tighter sizes for reading on a computer screen. */
+const webType: Record<keyof typeof phoneType, TextStyle> = {
+  hero: { fontFamily: fonts.displayHeavy, fontSize: 48, lineHeight: 54, letterSpacing: -1 },
+  display: { fontFamily: fonts.displayHeavy, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
+  title: { fontFamily: fonts.display, fontSize: 26, lineHeight: 32, letterSpacing: -0.4 },
+  h2: { fontFamily: fonts.display, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
+  h3: { fontFamily: fonts.displayBold, fontSize: 16, lineHeight: 22 },
+  num: { fontFamily: fonts.display, fontSize: 20, lineHeight: 26, letterSpacing: -0.3 },
+  body: { fontFamily: fonts.body, fontSize: 14.5, lineHeight: 22 },
+  bodyStrong: { fontFamily: fonts.semibold, fontSize: 14.5, lineHeight: 22 },
+  label: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
+  small: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
+  smallStrong: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 19 },
+  caption: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
+  micro: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
+};
+
+export const type: Record<keyof typeof phoneType, TextStyle> = isWeb ? webType : phoneType;
+
+export type TypeVariant = keyof typeof phoneType;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32, huge: 44 } as const;
 export const radius = { xs: 6, sm: 10, md: 14, lg: 18, xl: 24, pill: 999 } as const;

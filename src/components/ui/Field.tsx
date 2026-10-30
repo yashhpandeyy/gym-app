@@ -44,6 +44,7 @@ export function Input({
           cursorColor={c.primary}
           multiline={multiline}
           textAlignVertical={multiline ? 'top' : 'center'}
+          accessibilityLabel={label}
           {...rest}
           onFocus={(e) => {
             setFocused(true);

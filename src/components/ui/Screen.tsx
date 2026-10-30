@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
+  Platform,
   RefreshControl,
   ScrollView,
   View,
@@ -14,6 +15,10 @@ import { gutter, makeStyles, useTheme } from '@/theme';
 
 import { IconButton } from './Button';
 import { Text } from './Text';
+
+/** On a computer the page is a centred column, not a phone stretched edge to edge. */
+const WEB = Platform.OS === 'web';
+const webColumn = WEB ? ({ width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: 32 } as const) : null;
 
 type HeaderKind = 'large' | 'stack' | 'modal' | 'none';
 
@@ -51,15 +56,16 @@ export function Screen({
 
   const bar =
     header === 'stack' ? (
-      <View style={s.bar}>
-        <IconButton icon="chevron-back" label="Back" onPress={back} />
-        <Text variant="h3" numberOfLines={1} style={s.barTitle}>
+      <View style={[s.bar, webColumn, WEB && { paddingTop: 22, paddingBottom: 4 }]}>
+        {/* The sidebar is the way around on a computer; the back arrow stays for phones and for detail pages. */}
+        {WEB && !onBack ? null : <IconButton icon="chevron-back" label="Back" onPress={back} />}
+        <Text variant={WEB ? 'title' : 'h3'} numberOfLines={1} style={s.barTitle}>
           {title}
         </Text>
         <View style={s.barRight}>{right}</View>
       </View>
     ) : header === 'modal' ? (
-      <View style={s.bar}>
+      <View style={[s.bar, webColumn]}>
         <Text variant="h2" numberOfLines={1} style={[s.barTitle, { marginLeft: 4 }]}>
           {title}
         </Text>
@@ -68,9 +74,9 @@ export function Screen({
           <IconButton icon="close" label="Close" onPress={back} />
         </View>
       </View>
-    ) : header === 'large' && (left || right) ? (
-      <View style={s.bar}>
-        <View style={{ flex: 1 }}>{left}</View>
+    ) : header === 'large' && ((!WEB && left) || right) ? (
+      <View style={[s.bar, webColumn]}>
+        <View style={{ flex: 1 }}>{WEB ? null : left}</View>
         <View style={s.barRight}>{right}</View>
       </View>
     ) : null;
@@ -96,7 +102,7 @@ export function Screen({
   const body = scroll ? (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={[s.content, { paddingBottom: bottomPad }, contentStyle]}
+      contentContainerStyle={[s.content, webColumn, WEB && !bar && { paddingTop: 28 }, { paddingBottom: bottomPad }, contentStyle]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       automaticallyAdjustKeyboardInsets
@@ -110,7 +116,7 @@ export function Screen({
       {children}
     </ScrollView>
   ) : (
-    <View style={[{ flex: 1 }, s.contentFixed, contentStyle]}>
+    <View style={[{ flex: 1 }, s.contentFixed, webColumn, WEB && !bar && { paddingTop: 28 }, contentStyle]}>
       {largeTitle}
       {children}
     </View>
