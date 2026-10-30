@@ -8,8 +8,10 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationTheme, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect, useMemo } from 'react';
 
+import { Launch } from '@/components/Launch';
 import { CelebrationHost } from '@/components/fun/Celebration';
 import { SyncGate } from '@/components/SyncGate';
 import { ToastHost } from '@/components/ui';
@@ -93,6 +95,11 @@ function RootNavigator() {
     }
   }, [hydrated, remote, role, memberId, link?.gymCode, link?.status]);
 
+  // The window behind every screen matches the app, so no white or black frame shows through mid-transition.
+  useEffect(() => {
+    void SystemUI.setBackgroundColorAsync(t.c.bg).catch(() => {});
+  }, [t.c.bg]);
+
   useEffect(() => {
     setSoundEnabled(sound !== false);
   }, [sound]);
@@ -116,7 +123,7 @@ function RootNavigator() {
   return (
     <NavigationTheme value={navTheme}>
       <StatusBar style={t.scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.c.bg } }}>
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: t.c.bg } }}>
         <Stack.Screen name="index" />
         <Stack.Protected guard={!session}>
           <Stack.Screen name="(auth)" />
@@ -148,6 +155,7 @@ function RootNavigator() {
       <CelebrationHost />
       <SyncGate />
       <ToastHost />
+      <Launch />
     </NavigationTheme>
   );
 }

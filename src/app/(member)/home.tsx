@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import type React from 'react';
 import { ScrollView, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { BrandLockup } from '@/components/Brand';
 import { FlipAward } from '@/components/fun/FlipAward';
@@ -45,7 +44,6 @@ import { useSpotlight } from '@/lib/useSpotlight';
 import { confirm } from '@/lib/native';
 import { useApp, type AnnouncementKind } from '@/store';
 import { gutter, makeStyles, useTheme } from '@/theme';
-import { stagger } from '@/theme/motion';
 
 const KIND: Record<AnnouncementKind, { label: string; tone: 'warning' | 'primary' | 'success' | 'neutral' }> = {
   holiday: { label: 'Hours', tone: 'warning' },
@@ -54,9 +52,9 @@ const KIND: Record<AnnouncementKind, { label: string; tone: 'warning' | 'primary
   notice: { label: 'Notice', tone: 'neutral' },
 };
 
-/** Home sections rise into place one after another, once, when the screen first opens. */
-function Rise({ index, children }: { index: number; children: React.ReactNode }) {
-  return <Animated.View entering={FadeInDown.delay(index * stagger).springify().damping(16)}>{children}</Animated.View>;
+/** Home sections used to rise in one by one, which read as jumping on launch; the launch screen now fades in the whole page at once. */
+function Rise({ children }: { index: number; children: React.ReactNode }) {
+  return <>{children}</>;
 }
 
 function ordinal(n: number) {
@@ -81,7 +79,9 @@ export default function Home() {
   if (!me || !info) return null;
 
   const hours = hoursOn(now.date);
-  const openLine = !hours
+  const openLine = brand.hours.length === 0
+    ? ''
+    : !hours
     ? 'Closed today'
     : now.mins < toMinutes(hours.open)
       ? `Opens at ${fmtTime(hours.open)}`
@@ -141,7 +141,7 @@ export default function Home() {
           {greeting()}, {firstName(me.name)}
         </Text>
         <Text tone="soft">
-          {fmtLongDay(now.date)}. {openLine}.
+          {fmtLongDay(now.date)}{openLine ? `. ${openLine}.` : '.'}
         </Text>
       </View>
 

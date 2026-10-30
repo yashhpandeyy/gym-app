@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logo, PlateRings } from '@/components/Brand';
@@ -41,7 +41,7 @@ export default function Welcome() {
       <StatusBar style={c.onPrimary === '#FFFFFF' ? 'light' : 'dark'} />
       <PlateRings size={460} color={alpha(c.onPrimary, 0.09)} style={{ right: -190, top: 40 }} />
       <SafeAreaView style={s.safe}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
             <Logo size={48} inverted />
 

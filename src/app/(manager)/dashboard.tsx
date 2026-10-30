@@ -94,8 +94,8 @@ export default function Dashboard() {
       <View style={s.head}>
         <Text variant="title">Today</Text>
         <Text tone="soft">
-          {fmtLongDay(now.date)}.{' '}
-          {hours ? (now.mins < toMinutes(hours.close) ? `Open until ${fmtTime(hours.close)}.` : 'Closed for the day.') : 'Closed today.'}
+          {fmtLongDay(now.date)}.
+          {brand.hours.length === 0 ? '' : ` ${hours ? (now.mins < toMinutes(hours.close) ? `Open until ${fmtTime(hours.close)}.` : 'Closed for the day.') : 'Closed today.'}`}
         </Text>
       </View>
 

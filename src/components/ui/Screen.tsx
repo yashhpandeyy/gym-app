@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
-  Platform,
   RefreshControl,
   ScrollView,
   View,
@@ -120,7 +119,7 @@ export function Screen({
   return (
     <SafeAreaView edges={['top']} style={s.root}>
       {bar}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {body}
         {footer ? <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>{footer}</View> : null}
       </KeyboardAvoidingView>
