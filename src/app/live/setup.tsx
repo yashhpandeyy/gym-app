@@ -54,7 +54,7 @@ export default function Setup() {
   const slots = useApp((st) => st.slots);
   const members = useApp((st) => st.members);
 
-  const [name, setName] = useState(brand.name === 'GYM' && !link ? '' : brand.name);
+  const [name, setName] = useState(brand.name === platform.name && !link ? '' : brand.name);
   const [tagline, setTagline] = useState(brand.tagline);
   const [hex, setHex] = useState(brand.colors.primary);
   const [features, setFeatures] = useState<Record<string, boolean>>(() => Object.fromEntries(MODULES.map((m) => [m.key, brand.features[m.key] !== false])));
@@ -172,7 +172,7 @@ export default function Setup() {
   };
 
   const code = link?.gymCode ?? '';
-  const shareText = `Download the GYM app, tap “Join your gym with a code” and enter our gym code ${code}. Your ${name || 'gym'} app will open and the front desk will get you set up.`;
+  const shareText = `Download the ${platform.name} app, tap “Join your gym with a code” and enter our gym code ${code}. Your ${name || 'gym'} app will open and the front desk will get you set up.`;
 
   const steps: { done: boolean; icon: IconName; title: string; subtitle: string; go: () => void }[] = [
     { done: plans.some((p) => p.active && p.price > 0), icon: 'pricetag-outline', title: 'Set your plan prices', subtitle: 'Turn on the plans you sell and give each a price.', go: () => router.push('/manage/plans') },

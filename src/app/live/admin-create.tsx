@@ -38,7 +38,7 @@ export default function AdminCreate() {
   };
 
   const message = made
-    ? `Welcome to GYM! Your ${gymName.trim()} app is ready.\n\nGym code for your members: ${made.code}\nYour login: ${email.trim()}\nTemporary password: ${password}\n\nOpen the GYM app, tap “I run a gym” and sign in. You can then add your logo, colours, plans and members.
+    ? `Welcome to ${platform.name}! Your ${gymName.trim()} app is ready.\n\nGym code for your members: ${made.code}\nYour login: ${email.trim()}\nTemporary password: ${password}\n\nOpen the GYM app, tap “I run a gym” and sign in. You can then add your logo, colours, plans and members.
 
 On a computer, open your dashboard: ${platform.dashboardUrl}`
     : '';

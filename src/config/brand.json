@@ -1,8 +1,8 @@
 {
   "id": "gym",
-  "name": "GYM",
-  "shortName": "GYM",
-  "monogram": "GY",
+  "name": "MyGym",
+  "shortName": "MyGym",
+  "monogram": "GYM",
   "tagline": "Your gym, in your pocket.",
   "slug": "gym",
   "ios": {

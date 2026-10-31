@@ -32,7 +32,7 @@ export function Logo({ size = 36, inverted }: { size?: number; inverted?: boolea
       <Text
         style={{
           fontFamily: fonts.displayHeavy,
-          fontSize: size * 0.48,
+          fontSize: size * (brand.monogram.length > 2 ? 0.36 : 0.48),
           lineHeight: size * 0.56,
           color: fg,
           letterSpacing: -0.4,

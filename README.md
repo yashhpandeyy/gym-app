@@ -1,4 +1,4 @@
-# GYM: one app for every gym you sign
+# MyGym: one app for every gym you sign
 
 A gym membership app that re-skins itself for each gym. The owner signs up (or you create the gym for them on the spot), sets their logo, colours, hours and features, and gets a short **gym code** like `FK20`. Their members enter that code, and the app becomes theirs. Everything is real: members, bookings, check-ins, XP, plans and payments live on a server and stay in step on every phone.
 
@@ -66,7 +66,7 @@ Medicines and supplement ticks are never uploaded. Staff can't see them. Everyth
 
 ## Publishing
 
-Builds use [EAS](https://docs.expo.dev/eas/); no Mac or Android Studio is needed. One app called **GYM** serves every gym; members pick theirs with the code.
+Builds use [EAS](https://docs.expo.dev/eas/); no Mac or Android Studio is needed. One app called **MyGym** serves every gym; members pick theirs with the code.
 
 ```bash
 npx eas-cli@latest init

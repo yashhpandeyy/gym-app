@@ -18,10 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BRAND = os.path.join(ROOT, "src", "config", "brand.json")
 OUT = os.path.join(ROOT, "assets", "images")
 FONT = os.path.join(
-    ROOT, "node_modules", "@expo-google-fonts", "big-shoulders-display", "900Black", "BigShouldersDisplay_900Black.ttf"
-)
-FONT_FALLBACK = os.path.join(
-    ROOT, "node_modules", "@expo-google-fonts", "big-shoulders-display", "BigShouldersDisplay_900Black.ttf"
+    ROOT, "node_modules", "@expo-google-fonts", "bricolage-grotesque", "800ExtraBold", "BricolageGrotesque_800ExtraBold.ttf"
 )
 
 
@@ -51,10 +48,9 @@ def readable_on(rgb):
 
 
 def font(size):
-    path = FONT if os.path.exists(FONT) else FONT_FALLBACK
-    if not os.path.exists(path):
-        sys.exit("Big Shoulders font not found. Run npm install first.")
-    return ImageFont.truetype(path, size)
+    if not os.path.exists(FONT):
+        sys.exit("Bricolage Grotesque font not found. Run npm install first.")
+    return ImageFont.truetype(FONT, size)
 
 
 def draw_rings(img, cx, cy, size, rgba):
