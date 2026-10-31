@@ -1,23 +1,11 @@
-import { Barlow_400Regular, Barlow_500Medium, Barlow_600SemiBold, Barlow_700Bold } from '@expo-google-fonts/barlow';
-import {
-  BigShouldersDisplay_700Bold,
-  BigShouldersDisplay_800ExtraBold,
-  BigShouldersDisplay_900Black,
-} from '@expo-google-fonts/big-shoulders-display';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  Inter_800ExtraBold,
-} from '@expo-google-fonts/inter';
+import { BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
+import { Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from '@expo-google-fonts/figtree';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationTheme, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useMemo } from 'react';
-import { Platform } from 'react-native';
 
 import { Launch } from '@/components/Launch';
 import { CelebrationHost } from '@/components/fun/Celebration';
@@ -58,20 +46,15 @@ const MANAGER_SCREENS = ['member/[id]', 'requests', 'payments', 'plans', 'leads'
 const MANAGER_MODALS = ['add-member'];
 
 export default function RootLayout() {
-  // The website reads in Inter; the phone app keeps its own faces.
-  const [fontsLoaded, fontError] = useFonts(
-    Platform.OS === 'web'
-      ? { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold }
-      : {
-          BigShouldersDisplay_700Bold,
-          BigShouldersDisplay_800ExtraBold,
-          BigShouldersDisplay_900Black,
-          Barlow_400Regular,
-          Barlow_500Medium,
-          Barlow_600SemiBold,
-          Barlow_700Bold,
-        },
-  );
+  const [fontsLoaded, fontError] = useFonts({
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
+    BricolageGrotesque_800ExtraBold,
+    Figtree_400Regular,
+    Figtree_500Medium,
+    Figtree_600SemiBold,
+    Figtree_700Bold,
+  });
   const hydrated = useApp((s) => s.hydrated);
   const ready = (fontsLoaded || !!fontError) && hydrated;
 

@@ -19,9 +19,13 @@ export default function Root({ children }: PropsWithChildren) {
 }
 
 const css = `
-html, body { height: 100%; }
-body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+html, body { height: 100%; background: #F6F7F9; }
+@media (prefers-color-scheme: dark) { html, body { background: #0D0F12; } }
+body { font-family: Figtree_400Regular, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 [role="button"], [role="link"], [role="tab"] { cursor: pointer; }
 :focus-visible { outline: 2px solid #2F45FF; outline-offset: 2px; }
 input:focus-visible, textarea:focus-visible { outline: none; }
+* { scrollbar-width: thin; scrollbar-color: #C9CED6 transparent; }
+::selection { background: rgba(47, 69, 255, 0.18); }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 `;

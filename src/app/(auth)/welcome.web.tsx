@@ -4,6 +4,7 @@ import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { Logo, PlateRings } from '@/components/Brand';
 import { Button, Icon, Input, Text, type IconName } from '@/components/ui';
+import { SchemeToggle } from '@/components/web/WebShell';
 import { api, tokenStore, type FullGym } from '@/lib/api';
 import { brandFromGym } from '@/lib/gymBrand';
 import { useApp } from '@/store';
@@ -85,7 +86,7 @@ export default function WebWelcome() {
     <View style={s.root}>
       {split ? (
         <View style={[s.panel, { backgroundColor: c.primary }]}>
-          <PlateRings size={560} color={alpha(c.onPrimary, 0.07)} style={{ right: -220, bottom: -180 }} />
+          <PlateRings size={640} color={alpha(c.onPrimary, 0.09)} style={{ right: -280, top: -200 }} />
           <View style={s.panelInner}>
             <View style={s.lockup}>
               <Logo size={40} inverted />
@@ -101,9 +102,7 @@ export default function WebWelcome() {
             <View style={{ gap: 18 }}>
               {POINTS.map((p) => (
                 <View key={p.title} style={s.point}>
-                  <View style={[s.pointIcon, { backgroundColor: alpha(c.onPrimary, 0.14) }]}>
-                    <Icon name={p.icon} size={20} color={c.onPrimary} />
-                  </View>
+                  <Icon name={p.icon} size={20} color={c.onPrimary} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text variant="label" color={c.onPrimary}>
                       {p.title}
@@ -120,6 +119,9 @@ export default function WebWelcome() {
       ) : null}
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={s.formWrap} keyboardShouldPersistTaps="handled">
+        <View style={s.toggle}>
+          <SchemeToggle color={c.inkSoft} />
+        </View>
         <View style={s.form}>
           {!split ? <Logo size={40} /> : null}
           <View style={{ gap: 6 }}>
@@ -182,8 +184,8 @@ const useStyles = makeStyles((t) => ({
   panelInner: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 64, paddingVertical: 48, maxWidth: 720 },
   lockup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   point: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-  pointIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   formWrap: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  toggle: { position: 'absolute', top: 20, right: 20 },
   form: { width: '100%', maxWidth: 400, gap: 26 },
   error: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10 },
   switchRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },

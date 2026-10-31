@@ -55,7 +55,7 @@ export function TabBar({
               {({ pressed }) => (
                 <>
                   <View style={[s.center, { transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
-                    <Icon name={focused ? item.iconActive : item.icon} size={26} color={c.onPrimary} />
+                    <Icon name={focused ? item.iconActive : item.icon} size={24} color={c.surface} />
                   </View>
                   <Text variant="micro" color={focused ? c.ink : c.inkSoft} style={s.centerLabel}>
                     {item.label}
@@ -75,6 +75,7 @@ export function TabBar({
             onPress={onPress}
             onLongPress={onLongPress}
             style={({ pressed }) => [s.item, pressed && { opacity: 0.6 }]}>
+            {focused ? <View style={s.mark} /> : null}
             <Hop active={focused}>
               <Icon name={focused ? item.iconActive : item.icon} size={23} color={focused ? c.primaryInk : c.inkFaint} />
               {item.badge ? (
@@ -115,24 +116,18 @@ const useStyles = makeStyles((t) => ({
     borderTopWidth: 1,
     borderTopColor: t.c.line,
     paddingTop: 8,
-    overflow: 'visible',
   },
-  item: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4, minHeight: 48 },
+  item: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4, minHeight: 52 },
+  // A short rule on the bar's top edge marks the current tab.
+  mark: { position: 'absolute', top: -9, width: 28, height: 3, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, backgroundColor: t.c.primary },
   center: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginTop: -30,
-    backgroundColor: t.c.primary,
+    width: 52,
+    height: 34,
+    borderRadius: t.radius.md,
+    borderCurve: 'continuous',
+    backgroundColor: t.c.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 5,
-    borderColor: t.c.surface,
-    shadowColor: t.c.primary,
-    shadowOpacity: t.scheme === 'dark' ? 0 : 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
   },
   centerLabel: { marginTop: 0 },
   badge: {

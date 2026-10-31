@@ -5,6 +5,7 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
+  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
@@ -16,9 +17,7 @@ import { gutter, makeStyles, useTheme } from '@/theme';
 import { IconButton } from './Button';
 import { Text } from './Text';
 
-/** On a computer the page is a centred column, not a phone stretched edge to edge. */
 const WEB = Platform.OS === 'web';
-const webColumn = WEB ? ({ width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: 32 } as const) : null;
 
 type HeaderKind = 'large' | 'stack' | 'modal' | 'none';
 
@@ -35,6 +34,8 @@ export function Screen({
   refreshing,
   onRefresh,
   onBack,
+  bleed,
+  bleedColor,
 }: {
   title?: string;
   subtitle?: string;
@@ -48,10 +49,17 @@ export function Screen({
   refreshing?: boolean;
   onRefresh?: () => void;
   onBack?: () => void;
+  /** A block that runs edge to edge under the status bar, above the page content. */
+  bleed?: ReactNode;
+  bleedColor?: string;
 }) {
   const { c } = useTheme();
   const s = useStyles();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  // On a computer the page is a centred column, not a phone stretched edge to edge.
+  const margin = WEB && width >= 700 ? 32 : gutter;
+  const webColumn = WEB ? ({ width: '100%', maxWidth: 1180, alignSelf: 'center', paddingHorizontal: margin } as const) : null;
   const back = onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/')));
 
   const bar =
@@ -74,7 +82,7 @@ export function Screen({
           <IconButton icon="close" label="Close" onPress={back} />
         </View>
       </View>
-    ) : header === 'large' && ((!WEB && left) || right) ? (
+    ) : header === 'large' && !(WEB && title) && ((!WEB && left) || right) ? (
       <View style={[s.bar, webColumn]}>
         <View style={{ flex: 1 }}>{WEB ? null : left}</View>
         <View style={s.barRight}>{right}</View>
@@ -84,12 +92,16 @@ export function Screen({
   const largeTitle =
     header === 'large' && title ? (
       <View style={s.largeTitle}>
-        <Text variant="title">{title}</Text>
-        {subtitle ? (
-          <Text variant="body" tone="soft" style={{ marginTop: 4 }}>
-            {subtitle}
-          </Text>
-        ) : null}
+        <View style={{ flex: 1 }}>
+          <Text variant="title">{title}</Text>
+          {subtitle ? (
+            <Text variant="body" tone="soft" style={{ marginTop: 4 }}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {/* On a computer the page's actions sit level with its title. */}
+        {WEB ? right : null}
       </View>
     ) : subtitle && header !== 'none' ? (
       <Text variant="body" tone="soft" style={{ marginBottom: 8 }}>
@@ -101,7 +113,7 @@ export function Screen({
 
   const body = scroll ? (
     <ScrollView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: c.bg }}
       contentContainerStyle={[s.content, webColumn, WEB && !bar && { paddingTop: 28 }, { paddingBottom: bottomPad }, contentStyle]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
@@ -112,6 +124,13 @@ export function Screen({
           <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.primary} colors={[c.primary]} />
         ) : undefined
       }>
+      {bleed ? (
+        <View style={{ marginHorizontal: -margin, marginTop: -(WEB && !bar ? 28 : 4), marginBottom: 20 }}>
+          {/* Pulling the page down past the top shows the same colour, not a gap. */}
+          <View style={{ position: 'absolute', left: 0, right: 0, top: -600, height: 640, backgroundColor: bleedColor }} />
+          {bleed}
+        </View>
+      ) : null}
       {largeTitle}
       {children}
     </ScrollView>
@@ -123,7 +142,7 @@ export function Screen({
   );
 
   return (
-    <SafeAreaView edges={['top']} style={s.root}>
+    <SafeAreaView edges={['top']} style={[s.root, bleed ? { backgroundColor: bleedColor } : null]}>
       {bar}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {body}
@@ -146,7 +165,7 @@ const useStyles = makeStyles((t) => ({
   },
   barTitle: { flex: 1 },
   barRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  largeTitle: { marginTop: 6, marginBottom: 18 },
+  largeTitle: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 18 },
   content: { paddingHorizontal: gutter, paddingTop: 4 },
   contentFixed: { paddingHorizontal: gutter },
   footer: {

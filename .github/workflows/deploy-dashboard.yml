@@ -1,0 +1,34 @@
+# Builds the owner dashboard (the web version of the app) and publishes it to Cloudflare Pages as
+# the gym-dashboard project. Runs on every push to master that touches the app, and on demand from
+# the Actions tab ("Run workflow").
+#
+# The Pages project treats "main" as its production branch, so deploys are labelled --branch main
+# even though this repo builds from master.
+# Uses the same repository secrets as deploy-api.yml. The API token also needs the
+# "Cloudflare Pages: Edit" permission (My Profile > API Tokens > edit the token).
+name: Deploy dashboard
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['server/**', '.github/workflows/deploy-api.yml', '*.md', 'brands/**']
+  workflow_dispatch:
+
+concurrency: deploy-dashboard
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:web
+      - run: npx wrangler@4 pages deploy dist --project-name gym-dashboard --branch main

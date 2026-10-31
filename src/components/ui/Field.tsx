@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
+import { Platform, Pressable, TextInput, View, type TextInputProps } from 'react-native';
 
 import { haptic } from '@/lib/native';
 import { makeStyles, useTheme } from '@/theme';
 
 import { Icon, Text, type IconName } from './Text';
+
+const WEB = Platform.OS === 'web';
 
 export function Input({
   label,
@@ -30,7 +32,7 @@ export function Input({
         style={[
           s.box,
           multiline && s.multi,
-          { borderColor: error ? c.danger.solid : focused ? c.primary : c.line },
+          { borderColor: error ? c.danger.solid : focused ? c.primary : c.fieldLine },
         ]}>
         {icon ? <Icon name={icon} size={18} tone="faint" /> : null}
         {prefix ? (
@@ -102,15 +104,19 @@ export function Stepper({
           onChange(next);
         }}
         hitSlop={6}
-        style={({ pressed }) => [s.stepBtn, disabled && { opacity: 0.35 }, pressed && { backgroundColor: c.line }]}>
-        <Icon name={dir < 0 ? 'remove' : 'add'} size={18} />
+        style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+          s.stepBtn,
+          disabled && { opacity: 0.35 },
+          (pressed || hovered) && !disabled && { backgroundColor: c.line },
+        ]}>
+        <Icon name={dir < 0 ? 'remove' : 'add'} size={WEB ? 16 : 18} />
       </Pressable>
     );
   };
   return (
     <View style={s.stepper} accessibilityLabel={label}>
       {btn(-1)}
-      <Text variant="num" style={s.stepValue}>
+      <Text variant={WEB ? 'label' : 'num'} style={s.stepValue}>
         {format ? format(value) : value}
       </Text>
       {btn(1)}
@@ -141,7 +147,7 @@ export function CodeInput({
           const ch = value[i];
           const active = i === value.length;
           return (
-            <View key={i} style={[s.codeBox, { borderColor: active ? c.primary : ch ? c.lineStrong : c.line }]}>
+            <View key={i} style={[s.codeBox, { borderColor: active ? c.primary : c.fieldLine }]}>
               <Text variant="h2">{ch ? (secure ? '•' : ch) : ''}</Text>
             </View>
           );
@@ -169,32 +175,33 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    minHeight: 54,
+    minHeight: WEB ? 44 : 54,
     paddingHorizontal: 14,
     borderRadius: t.radius.md,
-    borderWidth: 1.5,
+    borderWidth: WEB ? 1 : 1.5,
     backgroundColor: t.c.surface,
   },
   multi: { alignItems: 'flex-start', paddingVertical: 12 },
   // The box border already shows focus, so drop the browser's own outline on web.
-  input: { flex: 1, fontSize: 16, paddingVertical: 0, minHeight: 50, outlineWidth: 0 },
+  input: { flex: 1, fontSize: WEB ? 14 : 16, paddingVertical: 0, minHeight: WEB ? 40 : 50, outlineWidth: 0 },
   inputMulti: { minHeight: 96, paddingTop: 2 },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: t.c.surfaceAlt,
     borderRadius: t.radius.md,
-    padding: 4,
+    padding: WEB ? 3 : 4,
   },
   stepBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: WEB ? 30 : 36,
+    height: WEB ? 30 : 36,
+    borderRadius: t.radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: t.c.surface,
+    ...(WEB ? { borderWidth: 1, borderColor: t.c.line, cursor: 'pointer' } : null),
   },
-  stepValue: { minWidth: 52, textAlign: 'center' },
+  stepValue: { minWidth: WEB ? 44 : 52, textAlign: 'center' },
   codeRow: { flexDirection: 'row', gap: 10 },
   codeBox: {
     // Shrinks to fit narrow screens and cards; never wider than the original 58.

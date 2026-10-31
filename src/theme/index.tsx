@@ -10,29 +10,35 @@ export type Scheme = 'light' | 'dark';
 
 type Tone = { fg: string; solid: string; bg: string };
 
+const isWeb = Platform.OS === 'web';
+
+/** Greys for the page, lifted a touch on the website. buildPalette tints them with the gym's colour. */
 const NEUTRAL = {
   light: {
-    bg: '#ECEEF1',
+    bg: isWeb ? '#F6F7F8' : '#F1F2F4',
     surface: '#FFFFFF',
-    surfaceAlt: '#F4F5F7',
-    line: '#DCE0E6',
-    lineStrong: '#C5CBD4',
-    ink: '#151A24',
-    inkSoft: '#586172',
-    inkFaint: '#8D95A3',
-    overlay: 'rgba(12,16,26,0.48)',
-    shadow: '#0B1020',
+    surfaceAlt: '#ECEEF1',
+    line: '#E1E4E8',
+    lineStrong: '#C6CBD2',
+    /** The edge of anything you type into: 3:1 against the surface, so a field can be found without guessing. */
+    fieldLine: '#8A919C',
+    ink: '#15171B',
+    inkSoft: '#555C67',
+    inkFaint: '#666E7A',
+    overlay: 'rgba(12,14,20,0.5)',
+    shadow: '#0B0D14',
   },
   dark: {
-    bg: '#0E1117',
-    surface: '#171B23',
-    surfaceAlt: '#1F242E',
-    line: '#2A303B',
-    lineStrong: '#3A414E',
-    ink: '#EEF1F5',
-    inkSoft: '#A3ACBA',
-    inkFaint: '#6E7787',
-    overlay: 'rgba(0,0,0,0.62)',
+    bg: '#0D0F12',
+    surface: '#16191E',
+    surfaceAlt: '#20242B',
+    line: '#2A2F37',
+    lineStrong: '#3C424D',
+    fieldLine: '#6B7380',
+    ink: '#F1F3F5',
+    inkSoft: '#AEB5C0',
+    inkFaint: '#868E9B',
+    overlay: 'rgba(0,0,0,0.66)',
     shadow: '#000000',
   },
 };
@@ -54,8 +60,16 @@ const STATUS: Record<Scheme, Record<'success' | 'warning' | 'danger' | 'ice', To
 };
 
 function buildPalette(brandPrimary: string, scheme: Scheme) {
-  const n = NEUTRAL[scheme];
+  const base = NEUTRAL[scheme];
   const light = scheme === 'light';
+  // A trace of the gym's colour in every grey, so each gym's app feels like its own and not a recolour.
+  const n = {
+    ...base,
+    bg: mix(base.bg, brandPrimary, 0.025),
+    surfaceAlt: mix(base.surfaceAlt, brandPrimary, 0.035),
+    line: mix(base.line, brandPrimary, 0.04),
+    ink: mix(base.ink, brandPrimary, 0.05),
+  };
   // A near-black brand vanishes on the dark background and a pale one on the light background,
   // so nudge the fill colour just enough to stay visible. Text colours are handled by primaryInk.
   let primary = brandPrimary;
@@ -73,53 +87,40 @@ function buildPalette(brandPrimary: string, scheme: Scheme) {
     primarySoft: mix(n.surface, primary, light ? 0.1 : 0.2),
     primaryLine: mix(n.surface, primary, light ? 0.32 : 0.45),
     primaryDeep: mix(primary, '#000000', 0.28),
+    /** The dark rail beside the website and other ink-filled surfaces, the same in both schemes. */
+    rail: mix('#14161B', primary, 0.04),
+    railLine: mix('#2B2F37', primary, 0.04),
+    railInk: '#F1F3F5',
+    railSoft: '#A7AEBA',
   };
 }
 
 export type Palette = ReturnType<typeof buildPalette>;
 
-const isWeb = Platform.OS === 'web';
-
-/** The phone app uses Big Shoulders and Barlow. The website uses Inter, the face most sites and dashboards read in. */
-export const fonts = (isWeb
-  ? {
-      displayHeavy: 'Inter_800ExtraBold',
-      display: 'Inter_700Bold',
-      displayBold: 'Inter_600SemiBold',
-      body: 'Inter_400Regular',
-      medium: 'Inter_500Medium',
-      semibold: 'Inter_600SemiBold',
-      bold: 'Inter_700Bold',
-    }
-  : {
-      displayHeavy: 'BigShouldersDisplay_900Black',
-      display: 'BigShouldersDisplay_800ExtraBold',
-      displayBold: 'BigShouldersDisplay_700Bold',
-      body: 'Barlow_400Regular',
-      medium: 'Barlow_500Medium',
-      semibold: 'Barlow_600SemiBold',
-      bold: 'Barlow_700Bold',
-    }) as {
-  displayHeavy: string;
-  display: string;
-  displayBold: string;
-  body: string;
-  medium: string;
-  semibold: string;
-  bold: string;
-};
 
 /**
- * Big Shoulders is a condensed display face cut from Chicago's industrial signage.
- * It carries the numbers members care about (days left, times, spots). Barlow handles reading.
+ * Two faces on every platform. Bricolage Grotesque carries titles and the numbers people come for:
+ * days left, money, spots. Figtree handles everything people read and tap. Both include the rupee sign.
  */
+export const fonts = {
+  displayHeavy: 'BricolageGrotesque_800ExtraBold',
+  display: 'BricolageGrotesque_700Bold',
+  displayBold: 'BricolageGrotesque_600SemiBold',
+  body: 'Figtree_400Regular',
+  medium: 'Figtree_500Medium',
+  semibold: 'Figtree_600SemiBold',
+  bold: 'Figtree_700Bold',
+};
+
+const figures: TextStyle = { fontVariant: ['tabular-nums'] };
+
 const phoneType = {
-  hero: { fontFamily: fonts.displayHeavy, fontSize: 88, lineHeight: 88, letterSpacing: -1 },
-  display: { fontFamily: fonts.displayHeavy, fontSize: 56, lineHeight: 58, letterSpacing: -0.5 },
-  title: { fontFamily: fonts.display, fontSize: 38, lineHeight: 42, letterSpacing: -0.2 },
-  h2: { fontFamily: fonts.display, fontSize: 28, lineHeight: 32 },
-  h3: { fontFamily: fonts.displayBold, fontSize: 22, lineHeight: 26, letterSpacing: 0.1 },
-  num: { fontFamily: fonts.display, fontSize: 24, lineHeight: 28 },
+  hero: { fontFamily: fonts.displayHeavy, fontSize: 76, lineHeight: 78, letterSpacing: -3, ...figures },
+  display: { fontFamily: fonts.displayHeavy, fontSize: 44, lineHeight: 48, letterSpacing: -1.4, ...figures },
+  title: { fontFamily: fonts.display, fontSize: 31, lineHeight: 36, letterSpacing: -0.9 },
+  h2: { fontFamily: fonts.display, fontSize: 24, lineHeight: 29, letterSpacing: -0.5 },
+  h3: { fontFamily: fonts.display, fontSize: 19, lineHeight: 24, letterSpacing: -0.3 },
+  num: { fontFamily: fonts.display, fontSize: 22, lineHeight: 26, letterSpacing: -0.4, ...figures },
   body: { fontFamily: fonts.body, fontSize: 16, lineHeight: 23 },
   bodyStrong: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 23 },
   label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
@@ -129,16 +130,16 @@ const phoneType = {
   micro: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
 } satisfies Record<string, TextStyle>;
 
-/** Smaller, tighter sizes for reading on a computer screen. */
+/** The same voice sized for a computer: a 14px body like most dashboards, with headings that step down gently. */
 const webType: Record<keyof typeof phoneType, TextStyle> = {
-  hero: { fontFamily: fonts.displayHeavy, fontSize: 48, lineHeight: 54, letterSpacing: -1 },
-  display: { fontFamily: fonts.displayHeavy, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
-  title: { fontFamily: fonts.display, fontSize: 26, lineHeight: 32, letterSpacing: -0.4 },
-  h2: { fontFamily: fonts.display, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
-  h3: { fontFamily: fonts.displayBold, fontSize: 16, lineHeight: 22 },
-  num: { fontFamily: fonts.display, fontSize: 20, lineHeight: 26, letterSpacing: -0.3 },
-  body: { fontFamily: fonts.body, fontSize: 14.5, lineHeight: 22 },
-  bodyStrong: { fontFamily: fonts.semibold, fontSize: 14.5, lineHeight: 22 },
+  hero: { fontFamily: fonts.displayHeavy, fontSize: 48, lineHeight: 52, letterSpacing: -1.8, ...figures },
+  display: { fontFamily: fonts.displayHeavy, fontSize: 32, lineHeight: 36, letterSpacing: -1, ...figures },
+  title: { fontFamily: fonts.display, fontSize: 26, lineHeight: 32, letterSpacing: -0.7 },
+  h2: { fontFamily: fonts.display, fontSize: 19, lineHeight: 24, letterSpacing: -0.35 },
+  h3: { fontFamily: fonts.display, fontSize: 16, lineHeight: 21, letterSpacing: -0.2 },
+  num: { fontFamily: fonts.display, fontSize: 18, lineHeight: 23, letterSpacing: -0.3, ...figures },
+  body: { fontFamily: fonts.body, fontSize: 14, lineHeight: 21 },
+  bodyStrong: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 21 },
   label: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
   small: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19 },
   smallStrong: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 19 },
@@ -151,7 +152,10 @@ export const type: Record<keyof typeof phoneType, TextStyle> = isWeb ? webType :
 export type TypeVariant = keyof typeof phoneType;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32, huge: 44 } as const;
-export const radius = { xs: 6, sm: 10, md: 14, lg: 18, xl: 24, pill: 999 } as const;
+/** Corners are rounder on a phone, where thumbs and chunky buttons want them; websites use tighter ones. */
+export const radius = (isWeb
+  ? { xs: 4, sm: 8, md: 10, lg: 12, xl: 16, pill: 999 }
+  : { xs: 6, sm: 10, md: 14, lg: 20, xl: 28, pill: 999 }) as { xs: number; sm: number; md: number; lg: number; xl: number; pill: number };
 export const gutter = 20;
 
 export type Theme = {

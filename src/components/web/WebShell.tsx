@@ -106,10 +106,10 @@ function Sidebar() {
       <View style={s.brand}>
         <Logo size={34} />
         <View style={{ flex: 1 }}>
-          <Text variant="label" numberOfLines={1}>
+          <Text variant="label" color={c.railInk} numberOfLines={1}>
             {brand.name}
           </Text>
-          <Text variant="caption" tone="faint" numberOfLines={1}>
+          <Text variant="caption" color={c.railSoft} numberOfLines={1}>
             Owner dashboard
           </Text>
         </View>
@@ -124,10 +124,10 @@ function Sidebar() {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }} showsVerticalScrollIndicator={false}>
         {groups.map((g, i) => (
-          <View key={g.title ?? i} style={{ marginTop: i ? 18 : 4 }}>
+          <View key={g.title ?? i} style={{ marginTop: i ? 16 : 4 }}>
             {g.title ? (
-              <Text variant="micro" tone="faint" style={s.groupTitle}>
-                {g.title.toUpperCase()}
+              <Text variant="caption" color={c.railSoft} style={s.groupTitle}>
+                {g.title}
               </Text>
             ) : null}
             {g.items.map((it) => (
@@ -139,13 +139,14 @@ function Sidebar() {
 
       <View style={s.foot}>
         <View style={{ flex: 1 }}>
-          <Text variant="smallStrong" numberOfLines={1}>
+          <Text variant="smallStrong" color={c.railInk} numberOfLines={1}>
             {session?.staffName ?? link?.name ?? 'Owner'}
           </Text>
-          <Text variant="caption" tone="faint" numberOfLines={1}>
+          <Text variant="caption" color={c.railSoft} numberOfLines={1}>
             Gym code {link?.gymCode ?? ''}
           </Text>
         </View>
+        <SchemeToggle color={c.railSoft} />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Sign out"
@@ -154,15 +155,32 @@ function Sidebar() {
             router.replace('/');
           }}
           style={({ pressed }) => [s.signOut, pressed && { opacity: 0.6 }]}>
-          <Icon name="log-out-outline" size={18} tone="soft" />
+          <Icon name="log-out-outline" size={18} color={c.railSoft} />
         </Pressable>
       </View>
     </View>
   );
 }
 
+/** Switches the website between light and dark. Until someone chooses, it follows their computer. */
+export function SchemeToggle({ color }: { color: string }) {
+  const { scheme } = useTheme();
+  const s = useStyles();
+  const setPrefs = useApp((st) => st.setPrefs);
+  const next = scheme === 'dark' ? 'light' : 'dark';
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Switch to ${next} mode`}
+      onPress={() => setPrefs({ scheme: next })}
+      style={({ pressed }) => [s.signOut, pressed && { opacity: 0.6 }]}>
+      <Icon name={next === 'light' ? 'sunny-outline' : 'moon-outline'} size={18} color={color} />
+    </Pressable>
+  );
+}
+
 function NavItem({ item, active }: { item: Item; active: boolean }) {
-  const { c } = useTheme();
+  const { c, alpha } = useTheme();
   const s = useStyles();
   const [hover, setHover] = useState(false);
   return (
@@ -172,9 +190,9 @@ function NavItem({ item, active }: { item: Item; active: boolean }) {
       onPress={() => router.push(item.path as never)}
       onHoverIn={() => setHover(true)}
       onHoverOut={() => setHover(false)}
-      style={[s.item, active ? { backgroundColor: c.primarySoft } : hover ? { backgroundColor: c.surfaceAlt } : null]}>
-      <Icon name={item.icon} size={18} color={active ? c.primaryInk : c.inkSoft} />
-      <Text variant={active ? 'smallStrong' : 'small'} color={active ? c.primaryInk : c.ink} style={{ flex: 1 }} numberOfLines={1}>
+      style={[s.item, active ? { backgroundColor: alpha('#FFFFFF', 0.11) } : hover ? { backgroundColor: alpha('#FFFFFF', 0.05) } : null]}>
+      <Icon name={item.icon} size={18} color={active ? c.railInk : c.railSoft} />
+      <Text variant={active ? 'smallStrong' : 'small'} color={active ? c.railInk : c.railSoft} style={{ flex: 1 }} numberOfLines={1}>
         {item.label}
       </Text>
       {item.badge ? (
@@ -192,19 +210,19 @@ const useStyles = makeStyles((t) => ({
   shell: { flex: 1, flexDirection: 'row', backgroundColor: t.c.bg },
   page: { flex: 1, minWidth: 0 },
   side: {
-    width: 256,
-    backgroundColor: t.c.surface,
+    width: 240,
+    backgroundColor: t.c.rail,
     borderRightWidth: 1,
-    borderRightColor: t.c.line,
+    borderRightColor: t.c.railLine,
     paddingHorizontal: 14,
     paddingTop: 18,
     paddingBottom: 12,
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, marginBottom: 16 },
   add: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: 10, marginBottom: 14, cursor: 'pointer' },
-  groupTitle: { paddingHorizontal: 10, marginBottom: 6, letterSpacing: 0.8 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 38, paddingHorizontal: 10, borderRadius: 8, marginBottom: 2, cursor: 'pointer' },
+  groupTitle: { paddingHorizontal: 10, marginBottom: 4 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 34, paddingHorizontal: 10, borderRadius: 8, marginBottom: 1, cursor: 'pointer' },
   badge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
-  foot: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12, paddingHorizontal: 6, borderTopWidth: 1, borderTopColor: t.c.line },
+  foot: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12, paddingHorizontal: 6, borderTopWidth: 1, borderTopColor: t.c.railLine },
   signOut: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
 }));
