@@ -4,7 +4,8 @@ import { View } from 'react-native';
 
 import { Button, Card, Input, Screen, Text, toast } from '@/components/ui';
 import { api } from '@/lib/api';
-import { haptic, share, whatsapp } from '@/lib/native';
+import { platform } from '@/config/platform';
+import { haptic, share, whatsapp, whatsappShare } from '@/lib/native';
 import { openGymAsOwner } from '@/lib/remote';
 import { makeStyles } from '@/theme';
 
@@ -37,7 +38,9 @@ export default function AdminCreate() {
   };
 
   const message = made
-    ? `Welcome to GYM! Your ${gymName.trim()} app is ready.\n\nGym code for your members: ${made.code}\nYour login: ${email.trim()}\nTemporary password: ${password}\n\nOpen the GYM app, tap “I run a gym” and sign in. You can then add your logo, colours, plans and members.`
+    ? `Welcome to ${platform.name}! Your ${gymName.trim()} app is ready.\n\nGym code for your members: ${made.code}\nYour login: ${email.trim()}\nTemporary password: ${password}\n\nOpen the GYM app, tap “I run a gym” and sign in. You can then add your logo, colours, plans and members.
+
+On a computer, open your dashboard: ${platform.dashboardUrl}`
     : '';
 
   const setUp = async () => {
@@ -70,6 +73,8 @@ export default function AdminCreate() {
           </Card>
           <Button title="Set it up now on this phone" icon="color-palette-outline" full loading={busy} onPress={setUp} />
           {phone.length >= 10 ? <Button title="Send to the owner on WhatsApp" icon="logo-whatsapp" variant="outline" full onPress={() => whatsapp(phone, message)} /> : null}
+          <Button title="Send dashboard link on WhatsApp" icon="logo-whatsapp" variant="outline" full onPress={() => whatsappShare(`Your ${gymName.trim()} dashboard for computer: ${platform.dashboardUrl}
+Sign in with ${email.trim()}`)} />
           <Button title="Share the details" icon="share-outline" variant="outline" full onPress={() => share(message)} />
           <Button title="Done" variant="ghost" full onPress={() => router.back()} />
         </View>

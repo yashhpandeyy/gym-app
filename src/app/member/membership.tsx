@@ -58,7 +58,7 @@ export default function Membership() {
 
   return (
     <Screen header="stack" title="Membership">
-      <MembershipCard info={info} memberName={me.name} onAction={onCardAction} />
+      <MembershipCard info={info} inset onAction={onCardAction} />
 
       {pending ? (
         <Card variant="soft" style={s.notice}>

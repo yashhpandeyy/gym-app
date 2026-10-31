@@ -86,7 +86,7 @@ export function CrowdMeter({ ratio, level, inside, closedNote }: { ratio: number
       <View style={{ flex: 1 }}>
         <Text variant="h3">{level === 'Closed' ? 'Closed' : `${inside} inside`}</Text>
         <Text variant="small" tone="soft">
-          {level === 'Closed' && closedNote ? closedNote : CROWD_COPY[level]}
+          {level === 'Closed' ? (closedNote && closedNote !== 'Closed' ? closedNote : 'Nobody on the floor') : CROWD_COPY[level]}
         </Text>
       </View>
     </View>

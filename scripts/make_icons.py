@@ -18,10 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BRAND = os.path.join(ROOT, "src", "config", "brand.json")
 OUT = os.path.join(ROOT, "assets", "images")
 FONT = os.path.join(
-    ROOT, "node_modules", "@expo-google-fonts", "big-shoulders-display", "900Black", "BigShouldersDisplay_900Black.ttf"
-)
-FONT_FALLBACK = os.path.join(
-    ROOT, "node_modules", "@expo-google-fonts", "big-shoulders-display", "BigShouldersDisplay_900Black.ttf"
+    ROOT, "node_modules", "@expo-google-fonts", "bricolage-grotesque", "800ExtraBold", "BricolageGrotesque_800ExtraBold.ttf"
 )
 
 
@@ -51,10 +48,9 @@ def readable_on(rgb):
 
 
 def font(size):
-    path = FONT if os.path.exists(FONT) else FONT_FALLBACK
-    if not os.path.exists(path):
-        sys.exit("Big Shoulders font not found. Run npm install first.")
-    return ImageFont.truetype(path, size)
+    if not os.path.exists(FONT):
+        sys.exit("Bricolage Grotesque font not found. Run npm install first.")
+    return ImageFont.truetype(FONT, size)
 
 
 def draw_rings(img, cx, cy, size, rgba):
@@ -73,7 +69,7 @@ def draw_rings(img, cx, cy, size, rgba):
     img.alpha_composite(layer)
 
 
-def draw_mark(img, text, color, height_ratio, center=None):
+def draw_mark(img, text, color, height_ratio, center=None, max_width=0.78):
     w, h = img.size
     target = int(h * height_ratio)
     f = font(target)
@@ -81,8 +77,8 @@ def draw_mark(img, text, color, height_ratio, center=None):
     box = d.textbbox((0, 0), text, font=f)
     tw, th = box[2] - box[0], box[3] - box[1]
     # Keep wide monograms inside the canvas.
-    if tw > w * 0.78:
-        f = font(int(target * (w * 0.78) / tw))
+    if tw > w * max_width:
+        f = font(int(target * (w * max_width) / tw))
         box = d.textbbox((0, 0), text, font=f)
         tw, th = box[2] - box[0], box[3] - box[1]
     cx, cy = center or (w / 2, h / 2)
@@ -109,11 +105,12 @@ def main():
     bg.convert("RGB").save(os.path.join(OUT, "android-icon-background.png"))
 
     fg = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-    draw_mark(fg, mono, on + (255,), 0.3)
+    # Round launcher masks only keep the middle 61% safe, so a wide mark has to stay inside it.
+    draw_mark(fg, mono, on + (255,), 0.3, max_width=0.5)
     fg.save(os.path.join(OUT, "android-icon-foreground.png"))
 
     mono_img = Image.new("RGBA", (432, 432), (0, 0, 0, 0))
-    draw_mark(mono_img, mono, (255, 255, 255, 255), 0.3)
+    draw_mark(mono_img, mono, (255, 255, 255, 255), 0.3, max_width=0.5)
     mono_img.save(os.path.join(OUT, "android-icon-monochrome.png"))
 
     # Splash mark sits on the brand-coloured splash background.

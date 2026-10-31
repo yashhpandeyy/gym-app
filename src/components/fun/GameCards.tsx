@@ -57,8 +57,8 @@ export function LevelCard({ game }: { game: GameState }) {
   return (
     <Card style={{ gap: 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-        <View style={[s.levelBadge, { backgroundColor: c.warning.solid, borderColor: c.warning.bg }]}>
-          <Text variant="h2" color="#FFFFFF">
+        <View style={[s.levelBadge, { backgroundColor: c.ink }]}>
+          <Text variant="h2" color={c.surface}>
             {game.level.level}
           </Text>
         </View>
@@ -127,9 +127,7 @@ export function LeagueCard({ game, members, limit }: { game: GameState; members:
   return (
     <Card padded={false}>
       <View style={s.leagueHead}>
-        <View style={[s.leagueIcon, { backgroundColor: c.warning.bg }]}>
-          <Icon name="podium" size={20} color={c.warning.solid} />
-        </View>
+        <Icon name="podium" size={22} color={c.warning.solid} />
         <View style={{ flex: 1 }}>
           <Text variant="h3">{league.name} league</Text>
           <Text variant="caption" tone="soft">
@@ -149,11 +147,7 @@ export function LeagueCard({ game, members, limit }: { game: GameState; members:
         <Animated.View
           key={r.id}
           entering={FadeInDown.delay(i * 45).springify().damping(16)}
-          style={[
-            s.leagueRow,
-            i < PROMOTE && { backgroundColor: c.success.bg },
-            r.me && { backgroundColor: c.primarySoft, borderColor: c.primary },
-          ]}>
+          style={[s.leagueRow, r.me && { backgroundColor: c.primarySoft }]}>
           <Text variant="label" style={s.rank} tone={i < PROMOTE ? 'success' : 'soft'}>
             {i + 1}
           </Text>
@@ -174,10 +168,9 @@ export function LeagueCard({ game, members, limit }: { game: GameState; members:
 const useStyles = makeStyles((t) => ({
   rings: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  levelBadge: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 4 },
+  levelBadge: { width: 52, height: 52, borderRadius: t.radius.md, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
   teaser: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: t.radius.lg, padding: 14 },
   leagueHead: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingBottom: 8 },
-  leagueIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   leagueMsg: { paddingHorizontal: 16, paddingBottom: 10 },
   leagueRow: {
     flexDirection: 'row',
@@ -186,9 +179,8 @@ const useStyles = makeStyles((t) => ({
     marginHorizontal: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    borderRadius: t.radius.sm,
+    borderCurve: 'continuous',
     marginTop: 2,
   },
   rank: { width: 18, textAlign: 'center' },

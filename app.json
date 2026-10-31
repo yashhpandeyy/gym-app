@@ -22,6 +22,18 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "brandId": "gym",
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "596e6fd5-a379-4617-a58e-1bd44b7486f8"
+      }
+    },
+    "owner": "yashhpandeyy"
   }
 }

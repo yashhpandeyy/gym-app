@@ -12,7 +12,7 @@ import { platform } from '@/config/platform';
 import { api, type GymProfile } from '@/lib/api';
 import { WEEKDAYS_SHORT } from '@/lib/date';
 import { brandFromGym } from '@/lib/gymBrand';
-import { haptic, share, whatsapp } from '@/lib/native';
+import { haptic, share, whatsapp, whatsappShare } from '@/lib/native';
 import { paletteFromPngBase64 } from '@/lib/palette';
 import { signOut } from '@/lib/remote';
 import { useApp } from '@/store';
@@ -54,7 +54,7 @@ export default function Setup() {
   const slots = useApp((st) => st.slots);
   const members = useApp((st) => st.members);
 
-  const [name, setName] = useState(brand.name === 'GYM' && !link ? '' : brand.name);
+  const [name, setName] = useState(brand.name === platform.name && !link ? '' : brand.name);
   const [tagline, setTagline] = useState(brand.tagline);
   const [hex, setHex] = useState(brand.colors.primary);
   const [features, setFeatures] = useState<Record<string, boolean>>(() => Object.fromEntries(MODULES.map((m) => [m.key, brand.features[m.key] !== false])));
@@ -172,7 +172,7 @@ export default function Setup() {
   };
 
   const code = link?.gymCode ?? '';
-  const shareText = `Download the GYM app, tap “Join your gym with a code” and enter our gym code ${code}. Your ${name || 'gym'} app will open and the front desk will get you set up.`;
+  const shareText = `Download the ${platform.name} app, tap “Join your gym with a code” and enter our gym code ${code}. Your ${name || 'gym'} app will open and the front desk will get you set up.`;
 
   const steps: { done: boolean; icon: IconName; title: string; subtitle: string; go: () => void }[] = [
     { done: plans.some((p) => p.active && p.price > 0), icon: 'pricetag-outline', title: 'Set your plan prices', subtitle: 'Turn on the plans you sell and give each a price.', go: () => router.push('/manage/plans') },
@@ -216,6 +216,16 @@ export default function Setup() {
           <Pill label={pending ? 'Waiting for activation' : 'Live'} tone={pending ? 'warning' : 'success'} dot />
           <Button title="Share" size="sm" variant="soft" icon="share-outline" onPress={() => share(shareText)} />
         </View>
+      </Card>
+
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="label">Dashboard on your computer</Text>
+          <Text variant="small" tone="soft">
+            Send the link to WhatsApp, open it on a PC and sign in with your email.
+          </Text>
+        </View>
+        <Button title="WhatsApp" size="sm" variant="soft" icon="logo-whatsapp" onPress={() => whatsappShare(`${name || 'Gym'} dashboard for computer: ${platform.dashboardUrl}`)} />
       </Card>
 
       {pending ? (

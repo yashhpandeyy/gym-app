@@ -359,7 +359,7 @@ async function inviteReply(c: Ctx, gymId: string, member: { id: string; name: st
     expiresInDays: CODE_DAYS,
     whatsapp: {
       phone: member.phone,
-      text: `Hi ${member.name}, welcome to ${g?.name}! Open the GYM app and sign in with your phone number and this code: ${code}. Keep it: it's your login.`,
+      text: `Hi ${member.name}, welcome to ${g?.name}! Open the MyGym app and sign in with your phone number and this code: ${code}. Keep it: it's your login.`,
     },
   };
 }

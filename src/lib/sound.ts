@@ -14,6 +14,9 @@ export type SoundName = keyof typeof FILES;
 
 const VOLUME: Record<SoundName, number> = { tap: 0.35, pop: 0.6, thud: 0.7, warn: 0.6, flip: 0.7, success: 0.8, reward: 0.9 };
 
+// Moments the owner chose to keep silent (picked "None" in the sound picker).
+const SILENT: ReadonlySet<SoundName> = new Set<SoundName>(['tap']);
+
 let enabled = true;
 let ready = false;
 const players = new Map<SoundName, AudioPlayer>();
@@ -24,7 +27,7 @@ export function setSoundEnabled(on: boolean) {
 
 /** Plays a short effect. Never throws, so a missing audio device can't break a tap. */
 export function playSound(name: SoundName) {
-  if (!enabled) return;
+  if (!enabled || SILENT.has(name)) return;
   try {
     if (!ready) {
       ready = true;

@@ -32,10 +32,10 @@ export function Logo({ size = 36, inverted }: { size?: number; inverted?: boolea
       <Text
         style={{
           fontFamily: fonts.displayHeavy,
-          fontSize: size * 0.48,
+          fontSize: size * (brand.monogram.length > 2 ? 0.36 : 0.48),
           lineHeight: size * 0.56,
           color: fg,
-          letterSpacing: 0.4,
+          letterSpacing: -0.4,
         }}>
         {brand.monogram}
       </Text>
@@ -52,6 +52,39 @@ export function BrandLockup({ size = 34 }: { size?: number }) {
         {brand.name}
       </Text>
     </View>
+  );
+}
+
+/**
+ * The same plate as a dial: the rim fills with whatever share of the membership is left, so the
+ * object on Home is the reading, not decoration around it.
+ */
+export function PlateDial({ size, value, color, track }: { size: number; value: number; color: string; track: string }) {
+  const h = size / 2;
+  const stroke = size * 0.06;
+  const r = h - stroke / 2;
+  const round = 2 * Math.PI * r;
+  const left = Math.max(0, Math.min(1, value));
+  return (
+    <Svg width={size} height={size}>
+      <Circle cx={h} cy={h} r={r} stroke={track} strokeWidth={stroke} fill="none" />
+      {left > 0 ? (
+        <Circle
+          cx={h}
+          cy={h}
+          r={r}
+          stroke={color}
+          strokeWidth={stroke}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${round * left} ${round}`}
+          transform={`rotate(-90 ${h} ${h})`}
+        />
+      ) : null}
+      <Circle cx={h} cy={h} r={size * 0.32} stroke={track} strokeWidth={size * 0.012} fill="none" />
+      <Circle cx={h} cy={h} r={size * 0.145} stroke={track} strokeWidth={size * 0.03} fill="none" />
+      <Circle cx={h} cy={h} r={size * 0.06} fill={track} />
+    </Svg>
   );
 }
 

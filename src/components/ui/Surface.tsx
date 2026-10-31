@@ -1,11 +1,13 @@
 import { Children, Fragment, isValidElement, type ReactNode } from 'react';
-import { Pressable, Switch, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, Switch, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { haptic } from '@/lib/native';
 import { makeStyles, useTheme } from '@/theme';
 
 import { LinkButton } from './Button';
 import { Icon, Text, toneColor, type IconName, type Tone } from './Text';
+
+const WEB = Platform.OS === 'web';
 
 export function Card({
   children,
@@ -78,7 +80,11 @@ export function Row({
       onPress={onPress}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={accessibilityLabel ?? title}
-      style={({ pressed }) => [s.row, action ? s.rowMain : null, pressed && { backgroundColor: c.surfaceAlt }]}>
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+        s.row,
+        action ? s.rowMain : null,
+        onPress && (pressed || hovered) && { backgroundColor: c.surfaceAlt },
+      ]}>
       {leading ??
         (icon ? (
           <View style={[s.rowIcon, { backgroundColor: alpha(tint, 0.12) }]}>
@@ -197,22 +203,65 @@ export function Fact({ label, value, tone = 'ink', align = 'left' }: { label: st
   );
 }
 
+/** A figure and its label. Sits in a ruled StatStrip, so the numbers read as one line of a ledger. */
+export function Stat({ label, value, tone = 'ink', note, noteTone = 'soft' }: { label: string; value: string; tone?: Tone; note?: string; noteTone?: Tone }) {
+  return (
+    <View style={{ gap: 2 }}>
+      <Text variant="small" tone="soft" numberOfLines={1}>
+        {label}
+      </Text>
+      <Text variant={WEB ? 'display' : 'title'} tone={tone} numberOfLines={1}>
+        {value}
+      </Text>
+      {note ? (
+        <Text variant="caption" tone={noteTone} numberOfLines={1}>
+          {note}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+export function StatStrip({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const s = useStyles();
+  const items = Children.toArray(children).filter(isValidElement);
+  return (
+    <View style={[s.strip, style]}>
+      {items.map((child, i) => (
+        <View key={child.key ?? i} style={[s.cell, i > 0 && s.cellRule]}>
+          {child}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const useStyles = makeStyles((t) => ({
-  card: { borderRadius: t.radius.lg },
+  strip: {
+    flexDirection: 'row',
+    backgroundColor: t.c.surface,
+    borderRadius: t.radius.lg,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    ...(WEB ? { borderWidth: 1, borderColor: t.c.line } : null),
+  },
+  cell: { flex: 1, minWidth: 0, paddingHorizontal: WEB ? 20 : 14, paddingVertical: WEB ? 18 : 14 },
+  cellRule: { borderLeftWidth: 1, borderLeftColor: t.c.line },
+  card: { borderRadius: t.radius.lg, borderCurve: 'continuous', ...(WEB ? { borderWidth: 1, borderColor: t.c.line } : null) },
   padded: { padding: 16 },
   surface: { backgroundColor: t.c.surface },
   inset: { backgroundColor: t.c.surfaceAlt },
   outline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: t.c.line },
   soft: { backgroundColor: t.c.primarySoft },
-  group: { backgroundColor: t.c.surface, borderRadius: t.radius.lg, overflow: 'hidden' },
+  group: { backgroundColor: t.c.surface, borderRadius: t.radius.lg, borderCurve: 'continuous', overflow: 'hidden', ...(WEB ? { borderWidth: 1, borderColor: t.c.line } : null) },
   sep: { height: 1, backgroundColor: t.c.line },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13, minHeight: 56 },
-  rowIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: WEB ? 11 : 13, minHeight: WEB ? 52 : 56 },
+  rowIcon: { width: WEB ? 32 : 36, height: WEB ? 32 : 36, borderRadius: t.radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
   rowBody: { flex: 1, gap: 1 },
   rowValue: { maxWidth: 150 },
   rowWithAction: { flexDirection: 'row', alignItems: 'center' },
   rowMain: { flex: 1, paddingRight: 8 },
   rowAction: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 14 },
-  section: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 30, marginBottom: 12 },
+  section: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: WEB ? 28 : 34, marginBottom: WEB ? 10 : 12 },
   divider: { height: 1, backgroundColor: t.c.line },
 }));

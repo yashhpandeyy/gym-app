@@ -1,17 +1,16 @@
-import { Barlow_400Regular, Barlow_500Medium, Barlow_600SemiBold, Barlow_700Bold } from '@expo-google-fonts/barlow';
-import {
-  BigShouldersDisplay_700Bold,
-  BigShouldersDisplay_800ExtraBold,
-  BigShouldersDisplay_900Black,
-} from '@expo-google-fonts/big-shoulders-display';
+import { BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
+import { Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from '@expo-google-fonts/figtree';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationTheme, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect, useMemo } from 'react';
 
+import { Launch } from '@/components/Launch';
 import { CelebrationHost } from '@/components/fun/Celebration';
 import { SyncGate } from '@/components/SyncGate';
+import { WebShell } from '@/components/web/WebShell';
 import { ToastHost } from '@/components/ui';
 import '@/lib/remote';
 import { setSoundEnabled } from '@/lib/sound';
@@ -48,13 +47,13 @@ const MANAGER_MODALS = ['add-member'];
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    BigShouldersDisplay_700Bold,
-    BigShouldersDisplay_800ExtraBold,
-    BigShouldersDisplay_900Black,
-    Barlow_400Regular,
-    Barlow_500Medium,
-    Barlow_600SemiBold,
-    Barlow_700Bold,
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
+    BricolageGrotesque_800ExtraBold,
+    Figtree_400Regular,
+    Figtree_500Medium,
+    Figtree_600SemiBold,
+    Figtree_700Bold,
   });
   const hydrated = useApp((s) => s.hydrated);
   const ready = (fontsLoaded || !!fontError) && hydrated;
@@ -93,6 +92,11 @@ function RootNavigator() {
     }
   }, [hydrated, remote, role, memberId, link?.gymCode, link?.status]);
 
+  // The window behind every screen matches the app, so no white or black frame shows through mid-transition.
+  useEffect(() => {
+    void SystemUI.setBackgroundColorAsync(t.c.bg).catch(() => {});
+  }, [t.c.bg]);
+
   useEffect(() => {
     setSoundEnabled(sound !== false);
   }, [sound]);
@@ -116,7 +120,8 @@ function RootNavigator() {
   return (
     <NavigationTheme value={navTheme}>
       <StatusBar style={t.scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.c.bg } }}>
+      <WebShell>
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: t.c.bg } }}>
         <Stack.Screen name="index" />
         <Stack.Protected guard={!session}>
           <Stack.Screen name="(auth)" />
@@ -145,9 +150,11 @@ function RootNavigator() {
           <Stack.Screen name="live/admin-create" options={{ presentation: 'modal' }} />
         </Stack.Protected>
       </Stack>
+      </WebShell>
       <CelebrationHost />
       <SyncGate />
       <ToastHost />
+      <Launch />
     </NavigationTheme>
   );
 }

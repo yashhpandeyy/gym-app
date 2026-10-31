@@ -5,6 +5,7 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
+  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
@@ -15,6 +16,8 @@ import { gutter, makeStyles, useTheme } from '@/theme';
 
 import { IconButton } from './Button';
 import { Text } from './Text';
+
+const WEB = Platform.OS === 'web';
 
 type HeaderKind = 'large' | 'stack' | 'modal' | 'none';
 
@@ -31,6 +34,8 @@ export function Screen({
   refreshing,
   onRefresh,
   onBack,
+  bleed,
+  bleedColor,
 }: {
   title?: string;
   subtitle?: string;
@@ -44,23 +49,31 @@ export function Screen({
   refreshing?: boolean;
   onRefresh?: () => void;
   onBack?: () => void;
+  /** A block that runs edge to edge under the status bar, above the page content. */
+  bleed?: ReactNode;
+  bleedColor?: string;
 }) {
   const { c } = useTheme();
   const s = useStyles();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  // On a computer the page is a centred column, not a phone stretched edge to edge.
+  const margin = WEB && width >= 700 ? 32 : gutter;
+  const webColumn = WEB ? ({ width: '100%', maxWidth: 1180, alignSelf: 'center', paddingHorizontal: margin } as const) : null;
   const back = onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/')));
 
   const bar =
     header === 'stack' ? (
-      <View style={s.bar}>
-        <IconButton icon="chevron-back" label="Back" onPress={back} />
-        <Text variant="h3" numberOfLines={1} style={s.barTitle}>
+      <View style={[s.bar, webColumn, WEB && { paddingTop: 22, paddingBottom: 4 }]}>
+        {/* The sidebar is the way around on a computer; the back arrow stays for phones and for detail pages. */}
+        {WEB && !onBack ? null : <IconButton icon="chevron-back" label="Back" onPress={back} />}
+        <Text variant={WEB ? 'title' : 'h3'} numberOfLines={1} style={s.barTitle}>
           {title}
         </Text>
         <View style={s.barRight}>{right}</View>
       </View>
     ) : header === 'modal' ? (
-      <View style={s.bar}>
+      <View style={[s.bar, webColumn]}>
         <Text variant="h2" numberOfLines={1} style={[s.barTitle, { marginLeft: 4 }]}>
           {title}
         </Text>
@@ -69,9 +82,9 @@ export function Screen({
           <IconButton icon="close" label="Close" onPress={back} />
         </View>
       </View>
-    ) : header === 'large' && (left || right) ? (
-      <View style={s.bar}>
-        <View style={{ flex: 1 }}>{left}</View>
+    ) : header === 'large' && !(WEB && title) && ((!WEB && left) || right) ? (
+      <View style={[s.bar, webColumn]}>
+        <View style={{ flex: 1 }}>{WEB ? null : left}</View>
         <View style={s.barRight}>{right}</View>
       </View>
     ) : null;
@@ -79,12 +92,16 @@ export function Screen({
   const largeTitle =
     header === 'large' && title ? (
       <View style={s.largeTitle}>
-        <Text variant="title">{title}</Text>
-        {subtitle ? (
-          <Text variant="body" tone="soft" style={{ marginTop: 4 }}>
-            {subtitle}
-          </Text>
-        ) : null}
+        <View style={{ flex: 1 }}>
+          <Text variant="title">{title}</Text>
+          {subtitle ? (
+            <Text variant="body" tone="soft" style={{ marginTop: 4 }}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {/* On a computer the page's actions sit level with its title. */}
+        {WEB ? right : null}
       </View>
     ) : subtitle && header !== 'none' ? (
       <Text variant="body" tone="soft" style={{ marginBottom: 8 }}>
@@ -96,8 +113,8 @@ export function Screen({
 
   const body = scroll ? (
     <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={[s.content, { paddingBottom: bottomPad }, contentStyle]}
+      style={{ flex: 1, backgroundColor: c.bg }}
+      contentContainerStyle={[s.content, webColumn, WEB && !bar && { paddingTop: 28 }, { paddingBottom: bottomPad }, contentStyle]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       automaticallyAdjustKeyboardInsets
@@ -107,20 +124,27 @@ export function Screen({
           <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.primary} colors={[c.primary]} />
         ) : undefined
       }>
+      {bleed ? (
+        <View style={{ marginHorizontal: -margin, marginTop: -(WEB && !bar ? 28 : 4), marginBottom: 20 }}>
+          {/* Pulling the page down past the top shows the same colour, not a gap. */}
+          <View style={{ position: 'absolute', left: 0, right: 0, top: -600, height: 640, backgroundColor: bleedColor }} />
+          {bleed}
+        </View>
+      ) : null}
       {largeTitle}
       {children}
     </ScrollView>
   ) : (
-    <View style={[{ flex: 1 }, s.contentFixed, contentStyle]}>
+    <View style={[{ flex: 1 }, s.contentFixed, webColumn, WEB && !bar && { paddingTop: 28 }, contentStyle]}>
       {largeTitle}
       {children}
     </View>
   );
 
   return (
-    <SafeAreaView edges={['top']} style={s.root}>
+    <SafeAreaView edges={['top']} style={[s.root, bleed ? { backgroundColor: bleedColor } : null]}>
       {bar}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {body}
         {footer ? <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>{footer}</View> : null}
       </KeyboardAvoidingView>
@@ -141,7 +165,7 @@ const useStyles = makeStyles((t) => ({
   },
   barTitle: { flex: 1 },
   barRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  largeTitle: { marginTop: 6, marginBottom: 18 },
+  largeTitle: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 18 },
   content: { paddingHorizontal: gutter, paddingTop: 4 },
   contentFixed: { paddingHorizontal: gutter },
   footer: {

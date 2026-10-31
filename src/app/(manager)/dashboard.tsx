@@ -5,17 +5,18 @@ import { View } from 'react-native';
 import { BrandLockup } from '@/components/Brand';
 import { BarChart } from '@/components/Charts';
 import { CrowdMeter, SpotMeter } from '@/components/Meters';
+import { useWideWeb } from '@/components/web/WebShell';
 import {
   Avatar,
   Button,
   Card,
-  Divider,
-  Fact,
   Group,
   IconButton,
   Row,
   Screen,
   SectionHeader,
+  Stat,
+  StatStrip,
   Text,
 } from '@/components/ui';
 import { addDays, fmtClockRange, fmtDate, fmtLongDay, fmtRelativeInline, fmtTime, MONTHS_LONG, parts, toMinutes, WEEKDAYS_LONG, weekday } from '@/lib/date';
@@ -29,6 +30,7 @@ import { makeStyles, useTheme } from '@/theme';
 export default function Dashboard() {
   const { brand } = useTheme();
   const s = useStyles();
+  const wide = useWideWeb();
   const now = useNow();
   const gym = useGym();
   const payments = useApp((st) => st.payments);
@@ -87,33 +89,25 @@ export default function Dashboard() {
       `Hi ${firstName(name)}, your ${plan} membership at ${brand.name} ends on ${fmtDate(end)}. Renew in the app or at the desk to keep training without a break.`,
     );
 
-  return (
-    <Screen
-      left={<BrandLockup size={32} />}
-      right={<IconButton icon="settings-outline" label="Rules and settings" onPress={() => router.push('/manage/settings')} />}>
-      <View style={s.head}>
-        <Text variant="title">Today</Text>
-        <Text tone="soft">
-          {fmtLongDay(now.date)}.{' '}
-          {hours ? (now.mins < toMinutes(hours.close) ? `Open until ${fmtTime(hours.close)}.` : 'Closed for the day.') : 'Closed today.'}
-        </Text>
-      </View>
+  const settings = <IconButton icon="settings-outline" label="Rules and settings" onPress={() => router.push('/manage/settings')} />;
 
-      <Card style={{ gap: 16 }}>
-        <CrowdMeter ratio={crowd.ratio} level={crowd.level} inside={crowd.inside} closedNote={nextOpening(now.date, now.mins)} />
-        <Divider />
-        <View style={s.facts}>
-          <Fact label="Checked in" value={String(inToday)} />
-          <Fact
-            label={`vs last ${WEEKDAYS_LONG[weekday(now.date)].slice(0, 3)}`}
-            value={`${diff >= 0 ? '+' : '−'}${Math.abs(diff)}`}
-            tone={diff >= 0 ? 'success' : 'danger'}
-          />
-          <Fact label="Booked today" value={String(bookedToday)} />
-        </View>
-      </Card>
+  const openLine = brand.hours.length === 0 ? '' : ` ${hours ? (now.mins < toMinutes(hours.close) ? `Open until ${fmtTime(hours.close)}.` : 'Closed for the day.') : 'Closed today.'}`;
 
-      <SectionHeader title="Needs you" />
+  const checkedIn = <Stat label="Checked in" value={String(inToday)} note={`${diff >= 0 ? '+' : '−'}${Math.abs(diff)} vs last ${WEEKDAYS_LONG[weekday(now.date)].slice(0, 3)}`} noteTone={diff > 0 ? 'success' : diff < 0 ? 'danger' : 'soft'} />;
+  const booked = <Stat label="Booked today" value={String(bookedToday)} />;
+  const activeStat = <Stat label="Active" value={String(active)} />;
+  const pausedStat = <Stat label="Paused" value={String(paused)} tone="ice" />;
+  const joinedStat = <Stat label={wide ? 'Joined this month' : 'Joined'} value={String(joinedThisMonth)} />;
+
+  const floor = (
+    <Card>
+      <CrowdMeter ratio={crowd.ratio} level={crowd.level} inside={crowd.inside} closedNote={nextOpening(now.date, now.mins)} />
+    </Card>
+  );
+
+  const needsYou = (
+    <>
+      <SectionHeader title="Needs you" style={wide ? s.firstHeader : undefined} />
       {attention.length ? (
         <Group>
           {attention.map((a) => (
@@ -128,7 +122,11 @@ export default function Dashboard() {
           </Text>
         </Card>
       )}
+    </>
+  );
 
+  const slotsToday = (
+    <>
       <SectionHeader title="Today’s slots" action="Manage slots" onAction={() => router.push('/slots')} />
       <Card style={{ gap: 14 }}>
         {todaysSlots.length ? (
@@ -157,8 +155,12 @@ export default function Dashboard() {
           </Text>
         )}
       </Card>
+    </>
+  );
 
-      <SectionHeader title="Money" action="Payments" onAction={() => router.push('/manage/payments')} />
+  const money_ = (
+    <>
+      <SectionHeader title="Money" action="Payments" onAction={() => router.push('/manage/payments')} style={wide ? s.firstHeader : undefined} />
       <Card style={{ gap: 16 }}>
         <View>
           <Text variant="small" tone="soft">
@@ -176,46 +178,91 @@ export default function Dashboard() {
           format={(v) => money(v, { compact: true })}
         />
       </Card>
+    </>
+  );
 
-      <Card style={[s.facts, { marginTop: 12 }]}>
-        <Fact label="Active members" value={String(active)} />
-        <Fact label="Paused" value={String(paused)} tone="ice" />
-        <Fact label="Joined this month" value={String(joinedThisMonth)} />
-      </Card>
+  const endingSoon = ending.length ? (
+    <>
+      <SectionHeader title="Ending soon" action="See all" onAction={() => router.push({ pathname: '/members', params: { filter: 'ending' } })} />
+      <Group>
+        {ending.slice(0, 5).map(({ m, info }) => (
+          <Row
+            key={m.id}
+            leading={<Avatar name={m.name} size={36} />}
+            title={m.name}
+            subtitle={`${info.plan?.name ?? 'Plan'} ends ${fmtRelativeInline(info.end, now.date)}`}
+            chevron={false}
+            onPress={() => router.push(`/manage/member/${m.id}`)}
+            action={<Button title="Remind" icon="logo-whatsapp" size="sm" variant="soft" onPress={() => remind(m.name, m.phone, info.plan?.name ?? '', info.end)} />}
+          />
+        ))}
+      </Group>
+    </>
+  ) : null;
 
-      {ending.length ? (
+  return (
+    <Screen left={<BrandLockup size={32} />} right={wide ? undefined : settings}>
+      <View style={s.head}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="title">Today</Text>
+          <Text tone="soft">
+            {fmtLongDay(now.date)}.{openLine}
+          </Text>
+        </View>
+        {wide ? settings : null}
+      </View>
+
+      {wide ? (
         <>
-          <SectionHeader title="Ending soon" action="See all" onAction={() => router.push({ pathname: '/members', params: { filter: 'ending' } })} />
-          <Group>
-            {ending.slice(0, 5).map(({ m, info }) => (
-              <Row
-                key={m.id}
-                leading={<Avatar name={m.name} size={36} />}
-                title={m.name}
-                subtitle={`${info.plan?.name ?? 'Plan'} ends ${fmtRelativeInline(info.end, now.date)}`}
-                chevron={false}
-                onPress={() => router.push(`/manage/member/${m.id}`)}
-                action={
-                  <Button
-                    title="Remind"
-                    icon="logo-whatsapp"
-                    size="sm"
-                    variant="soft"
-                    onPress={() => remind(m.name, m.phone, info.plan?.name ?? '', info.end)}
-                  />
-                }
-              />
-            ))}
-          </Group>
+          <StatStrip>
+            {checkedIn}
+            {booked}
+            {activeStat}
+            {pausedStat}
+            {joinedStat}
+          </StatStrip>
+          <View style={s.cols}>
+            <View style={s.colMain}>
+              {needsYou}
+              {slotsToday}
+            </View>
+            <View style={s.colSide}>
+              {money_}
+              <SectionHeader title="On the floor" />
+              {floor}
+              {endingSoon}
+            </View>
+          </View>
         </>
-      ) : null}
+      ) : (
+        <>
+          <StatStrip>
+            {checkedIn}
+            {booked}
+          </StatStrip>
+          <View style={{ marginTop: 12 }}>{floor}</View>
+          {needsYou}
+          {slotsToday}
+          {money_}
+          <StatStrip style={{ marginTop: 12 }}>
+            {activeStat}
+            {pausedStat}
+            {joinedStat}
+          </StatStrip>
+          {endingSoon}
+        </>
+      )}
     </Screen>
   );
 }
 
 const useStyles = makeStyles(() => ({
-  head: { marginTop: 4, marginBottom: 20, gap: 4 },
-  facts: { flexDirection: 'row', justifyContent: 'space-between' },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, marginBottom: 20 },
+  cols: { flexDirection: 'row', alignItems: 'flex-start', gap: 28, marginTop: 28 },
+  colMain: { flex: 3, minWidth: 0 },
+  colSide: { flex: 2, minWidth: 0 },
+  // The first heading in a column sits level with its neighbour, not a section's width below it.
+  firstHeader: { marginTop: 0 },
   slotRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   slotTime: { width: 118 },
   slotCount: { width: 44, textAlign: 'right' },

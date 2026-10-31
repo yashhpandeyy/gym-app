@@ -20,7 +20,6 @@ import type { Member } from '@/store/types';
 import { gutter, makeStyles, useTheme } from '@/theme';
 
 import { Logo, PlateRings } from './Brand';
-import { Sheen } from './fun/Effects';
 import { QRPass } from './QRPass';
 import { Pill, Text } from './ui';
 
@@ -115,21 +114,11 @@ export function PassCard({
     opacity: 0.18 + Math.min(0.3, Math.abs(ry.value) / 40),
     transform: [{ translateX: ry.value * 9 }, { translateY: rx.value * 5 }, { rotate: '22deg' }],
   }));
-  const shadow = useAnimatedStyle(() => ({
-    transform: [{ translateX: -ry.value * 1.2 }, { translateY: 14 + rx.value * 0.8 }],
-  }));
 
   return (
     <View style={{ width: cardW, alignSelf: 'center' }}>
-      <Animated.View pointerEvents="none" style={[s.shadow, { backgroundColor: look }, shadow]} />
       <Animated.View style={[s.card, { backgroundColor: look }, card]}>
         <PlateRings size={260} color={alpha(fg, 0.1)} style={{ right: -90, top: -80 }} />
-        <LinearGradient
-          colors={[alpha('#FFFFFF', 0.16), alpha('#FFFFFF', 0), alpha('#000000', 0.14)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
         <Animated.View pointerEvents="none" style={[s.glare, glare]}>
           <LinearGradient
             colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0)']}
@@ -138,7 +127,6 @@ export function PassCard({
             style={StyleSheet.absoluteFill}
           />
         </Animated.View>
-        {!disabled ? <Sheen every={7000} delay={1500} opacity={0.2} /> : null}
 
         <View style={s.top}>
           <Logo size={28} inverted />
@@ -146,7 +134,7 @@ export function PassCard({
             {brand.name}
           </Text>
           <Text variant="micro" color={alpha(fg, 0.8)}>
-            MEMBER
+            Member
           </Text>
         </View>
 
@@ -169,23 +157,15 @@ export function PassCard({
 }
 
 const useStyles = makeStyles((t) => ({
-  shadow: {
-    position: 'absolute',
-    left: 18,
-    right: 18,
-    top: 10,
-    bottom: 0,
-    borderRadius: t.radius.xl,
-    opacity: t.scheme === 'dark' ? 0 : 0.35,
-  },
   card: {
-    borderRadius: 28,
+    borderRadius: t.radius.xl,
+    borderCurve: 'continuous',
     padding: 18,
     gap: 16,
     overflow: 'hidden',
   },
   glare: { position: 'absolute', top: -80, bottom: -80, left: '30%', width: 90 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  panel: { borderRadius: 22, paddingVertical: 14, alignItems: 'center' },
+  panel: { borderRadius: t.radius.lg, paddingVertical: 14, alignItems: 'center' },
   who: { gap: 2 },
 }));

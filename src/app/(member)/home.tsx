@@ -1,15 +1,15 @@
-import { router } from 'expo-router';
-import type React from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useCallback } from 'react';
 import { ScrollView, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { BrandLockup } from '@/components/Brand';
+import { Logo } from '@/components/Brand';
 import { FlipAward } from '@/components/fun/FlipAward';
 import { ChestTeaser, RingsCard } from '@/components/fun/GameCards';
 import { Bouncy } from '@/components/fun/Motion';
 import { StrengthSpotlight } from '@/components/fun/StrengthSpotlight';
 import { HourBars } from '@/components/Charts';
-import { MembershipCard } from '@/components/MembershipCard';
+import { MembershipCard, useMembershipLook } from '@/components/MembershipCard';
 import { CrowdMeter, SpotMeter } from '@/components/Meters';
 import {
   Button,
@@ -45,7 +45,6 @@ import { useSpotlight } from '@/lib/useSpotlight';
 import { confirm } from '@/lib/native';
 import { useApp, type AnnouncementKind } from '@/store';
 import { gutter, makeStyles, useTheme } from '@/theme';
-import { stagger } from '@/theme/motion';
 
 const KIND: Record<AnnouncementKind, { label: string; tone: 'warning' | 'primary' | 'success' | 'neutral' }> = {
   holiday: { label: 'Hours', tone: 'warning' },
@@ -54,11 +53,6 @@ const KIND: Record<AnnouncementKind, { label: string; tone: 'warning' | 'primary
   notice: { label: 'Notice', tone: 'neutral' },
 };
 
-/** Home sections rise into place one after another, once, when the screen first opens. */
-function Rise({ index, children }: { index: number; children: React.ReactNode }) {
-  return <Animated.View entering={FadeInDown.delay(index * stagger).springify().damping(16)}>{children}</Animated.View>;
-}
-
 function ordinal(n: number) {
   const v = n % 100;
   if (v >= 11 && v <= 13) return `${n}th`;
@@ -66,7 +60,7 @@ function ordinal(n: number) {
 }
 
 export default function Home() {
-  const { brand, c } = useTheme();
+  const { brand, c, scheme, alpha } = useTheme();
   const s = useStyles();
   const now = useNow();
   const gym = useGym();
@@ -77,11 +71,24 @@ export default function Home() {
   const prefs = useApp((st) => st.prefs);
   const notices = useApp((st) => st.notices);
   const endPauseEarly = useApp((st) => st.endPauseEarly);
+  const look = useMembershipLook(info?.status ?? 'active');
+
+  // The plate runs under the status bar, so the clock and battery follow its colour while Home is showing.
+  const plateIcons = look.fg === '#FFFFFF' || look.fg === c.railInk ? 'light' : 'dark';
+  const pageIcons = scheme === 'dark' ? 'light' : 'dark';
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle(plateIcons);
+      return () => setStatusBarStyle(pageIcons);
+    }, [plateIcons, pageIcons]),
+  );
 
   if (!me || !info) return null;
 
   const hours = hoursOn(now.date);
-  const openLine = !hours
+  const openLine = brand.hours.length === 0
+    ? ''
+    : !hours
     ? 'Closed today'
     : now.mins < toMinutes(hours.open)
       ? `Opens at ${fmtTime(hours.open)}`
@@ -124,66 +131,46 @@ export default function Home() {
     { icon: 'barbell-outline', label: 'Coaches', href: '/member/trainers', show: brand.features.trainers },
   ];
 
+  const awards = game && brand.features.gamification ? [...game.badges].sort((x, y) => Number(y.earned) - Number(x.earned) || y.have / y.need - x.have / x.need).slice(0, 8) : [];
+  const shortcuts = quick.filter((q) => q.show).slice(0, 4);
+
   return (
     <Screen
-      left={<BrandLockup size={32} />}
-      right={
-        <IconButton
-          icon="notifications-outline"
-          label={unread ? `Notifications, ${unread} unread` : 'Notifications'}
-          badge={unread > 0}
-          onPress={() => router.push('/member/notifications')}
-        />
-      }>
-      <Rise index={0}>
-      <View style={s.greeting}>
-        <Text variant="title">
-          {greeting()}, {firstName(me.name)}
-        </Text>
-        <Text tone="soft">
-          {fmtLongDay(now.date)}. {openLine}.
-        </Text>
-      </View>
-
-      </Rise>
-      <Rise index={1}>
+      header="none"
+      bleedColor={look.bg}
+      bleed={
         <MembershipCard
           info={info}
-          memberName={me.name}
           onPress={() => router.push('/member/membership')}
           onAction={onCardAction}
+          head={
+            <View style={s.head}>
+              <Logo size={36} inverted />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text variant="label" color={look.fg} numberOfLines={1}>
+                  {greeting()}, {firstName(me.name)}
+                </Text>
+                <Text variant="caption" color={alpha(look.fg, 0.86)} numberOfLines={1}>
+                  {fmtLongDay(now.date)}{openLine ? `. ${openLine}.` : '.'}
+                </Text>
+              </View>
+              <IconButton
+                icon="notifications-outline"
+                label={unread ? `Notifications, ${unread} unread` : 'Notifications'}
+                variant="onPrimary"
+                badge={unread > 0}
+                iconColor={look.fg}
+                onPress={() => router.push('/member/notifications')}
+              />
+            </View>
+          }
         />
-      </Rise>
-
-      {brand.features.gamification && highlights.length ? (
-        <Rise index={2}>
-          <SectionHeader
-            title={highlights[0].kind === 'best' ? 'Your personal bests' : 'What you’re best at'}
-            action="Leaderboards"
-            onAction={() => router.push('/member/leaderboards')}
-          />
-          <StrengthSpotlight highlights={highlights} />
-        </Rise>
-      ) : null}
-
-      {game && brand.features.gamification ? (
-        <Rise index={3}>
-          <SectionHeader title="Your awards" action="All awards" onAction={() => router.push('/club')} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.awardScroll} contentContainerStyle={s.awardRow}>
-            {[...game.badges]
-              .sort((a, b) => Number(b.earned) - Number(a.earned) || b.have / b.need - a.have / a.need)
-              .slice(0, 8)
-              .map((b) => (
-                <FlipAward key={b.id} badge={b} width={112} height={144} />
-              ))}
-          </ScrollView>
-        </Rise>
-      ) : null}
-
+      }>
       <SectionHeader
         title="Your next session"
         action={next ? 'Book another' : undefined}
         onAction={() => router.push('/book')}
+        style={s.firstSection}
       />
       {next?.ref && nextState ? (
         <Card style={{ gap: 12 }}>
@@ -228,26 +215,23 @@ export default function Home() {
                 : 'Renew your membership to start booking again.'}
           </Text>
           {info.status !== 'expired' ? (
-            <Button title="Book a slot" size="md" onPress={() => router.push('/book')} style={{ marginTop: 4 }} />
+            <Button title="Book a slot" size="md" full onPress={() => router.push('/book')} style={{ marginTop: 4 }} />
           ) : null}
         </Card>
       )}
 
-      <SectionHeader title="How busy it is" />
-      <Card style={{ gap: 16 }}>
-        <CrowdMeter ratio={crowd.ratio} level={crowd.level} inside={crowd.inside} closedNote={nextOpening(now.date, now.mins)} />
-        {load.length ? (
-          <>
-            <Divider />
-            <View style={{ gap: 10 }}>
-              <Text variant="smallStrong" tone="soft">
-                Usually on {fmtLongDay(now.date).split(',')[0]}s
+      {shortcuts.length ? (
+        <View style={s.quick}>
+          {shortcuts.map((q) => (
+            <Bouncy key={q.label} onPress={() => router.push(q.href)} style={s.quickItem} accessibilityLabel={q.label}>
+              <Icon name={q.icon} size={22} tone="primary" />
+              <Text variant="caption" tone="soft" numberOfLines={1}>
+                {q.label}
               </Text>
-              <HourBars data={load} nowHour={now.hour} />
-            </View>
-          </>
-        ) : null}
-      </Card>
+            </Bouncy>
+          ))}
+        </View>
+      ) : null}
 
       {game && brand.features.gamification ? (
         <>
@@ -256,9 +240,7 @@ export default function Home() {
             <RingsCard rings={game.rings} compact />
           </Bouncy>
           <Bouncy onPress={() => router.push('/club')} style={[s.league, { backgroundColor: c.surface }]} accessibilityLabel="Your league">
-            <View style={[s.leagueIcon, { backgroundColor: c.warning.bg }]}>
-              <Icon name="podium" size={18} color={c.warning.solid} />
-            </View>
+            <Icon name="podium" size={20} color={c.warning.solid} />
             <Text variant="small" style={{ flex: 1 }}>
               <Text variant="smallStrong">
                 {ordinal(game.league.rank)} of {game.league.standings.length} in {game.league.name} league.{' '}
@@ -298,64 +280,82 @@ export default function Home() {
         </>
       )}
 
-      <View style={s.quick}>
-        {quick
-          .filter((q) => q.show)
-          .slice(0, 4)
-          .map((q) => (
-            <Bouncy key={q.label} onPress={() => router.push(q.href)} style={s.quickItem} accessibilityLabel={q.label}>
-              <View style={s.quickIcon}>
-                <Icon name={q.icon} size={22} tone="primary" />
-              </View>
-              <Text variant="caption" tone="soft" numberOfLines={1}>
-                {q.label}
+      <SectionHeader title="How busy it is" />
+      <Card style={{ gap: 16 }}>
+        <CrowdMeter ratio={crowd.ratio} level={crowd.level} inside={crowd.inside} closedNote={nextOpening(now.date, now.mins)} />
+        {load.length ? (
+          <>
+            <Divider />
+            <View style={{ gap: 10 }}>
+              <Text variant="smallStrong" tone="soft">
+                Usually on {fmtLongDay(now.date).split(',')[0]}s
               </Text>
-            </Bouncy>
-          ))}
-      </View>
-
-      <SectionHeader title="Notice board" action="All updates" onAction={() => router.push('/member/notifications')} />
-      <View style={{ gap: 10 }}>
-        {board.map((a) => (
-          <Card key={a.id} style={{ gap: 6 }}>
-            <View style={s.rowBetween}>
-              <Pill label={KIND[a.kind].label} tone={KIND[a.kind].tone} />
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                {a.pinned ? <Icon name="pin" size={14} tone="faint" /> : null}
-                <Text variant="caption" tone="faint">
-                  {fmtRelativeDay(a.date, now.date)}
-                </Text>
-              </View>
+              <HourBars data={load} nowHour={now.hour} />
             </View>
-            <Text variant="label">{a.title}</Text>
-            <Text variant="small" tone="soft">
-              {a.body}
-            </Text>
-          </Card>
-        ))}
-      </View>
+          </>
+        ) : null}
+      </Card>
+
+      {brand.features.gamification && highlights.length ? (
+        <>
+          <SectionHeader
+            title={highlights[0].kind === 'best' ? 'Your personal bests' : 'What you’re best at'}
+            action="Leaderboards"
+            onAction={() => router.push('/member/leaderboards')}
+          />
+          <StrengthSpotlight highlights={highlights} />
+        </>
+      ) : null}
+
+      {awards.length ? (
+        <>
+          <SectionHeader title="Your awards" action="All awards" onAction={() => router.push('/club')} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.awardScroll} contentContainerStyle={s.awardRow}>
+            {awards.map((b) => (
+              <FlipAward key={b.id} badge={b} width={112} height={144} />
+            ))}
+          </ScrollView>
+        </>
+      ) : null}
+
+      {board.length ? (
+        <>
+          <SectionHeader title="Notice board" action="All updates" onAction={() => router.push('/member/notifications')} />
+          <View style={{ gap: 10 }}>
+            {board.map((a) => (
+              <Card key={a.id} style={{ gap: 6 }}>
+                <View style={s.rowBetween}>
+                  <Pill label={KIND[a.kind].label} tone={KIND[a.kind].tone} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {a.pinned ? <Icon name="pin" size={14} tone="faint" /> : null}
+                    <Text variant="caption" tone="faint">
+                      {fmtRelativeDay(a.date, now.date)}
+                    </Text>
+                  </View>
+                </View>
+                <Text variant="label">{a.title}</Text>
+                <Text variant="small" tone="soft">
+                  {a.body}
+                </Text>
+              </Card>
+            ))}
+          </View>
+        </>
+      ) : null}
     </Screen>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  greeting: { marginTop: 4, marginBottom: 20, gap: 4 },
-  awardScroll: { marginHorizontal: -gutter, flexGrow: 0 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  firstSection: { marginTop: 8 },
+  awardScroll: { marginHorizontal: -gutter, flexGrow: 0, flexShrink: 0 },
   awardRow: { paddingHorizontal: gutter, gap: 10, paddingVertical: 4 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   timeRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   buttons: { flexDirection: 'row', gap: 10, marginTop: 4 },
   week: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  quick: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14, marginTop: 24 },
-  quickItem: { alignItems: 'center', gap: 8, width: 78 },
-  league: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: t.radius.lg, padding: 12, marginTop: 10 },
-  leagueIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  quickIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: t.radius.lg,
-    backgroundColor: t.c.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  quick: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, backgroundColor: t.c.surface, borderRadius: t.radius.lg, borderCurve: 'continuous', paddingVertical: 14, paddingHorizontal: 6 },
+  quickItem: { flex: 1, alignItems: 'center', gap: 6, minHeight: 44 },
+  league: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: t.radius.lg, borderCurve: 'continuous', padding: 14, marginTop: 10 },
 }));

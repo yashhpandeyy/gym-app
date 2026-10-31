@@ -76,7 +76,7 @@ export default function Members() {
       scroll={false}
       right={<IconButton icon="person-add-outline" label="Add member" variant="soft" onPress={() => router.push('/manage/add-member')} />}
       left={<View />}>
-      <View style={{ marginTop: -6 }}>
+      <View style={{ marginTop: 2 }}>
         <Input icon="search" placeholder="Search name, phone or member ID" value={query} onChangeText={setQuery} autoCorrect={false} returnKeyType="search" />
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterScroll} contentContainerStyle={s.filters}>
@@ -139,9 +139,10 @@ function MemberRow({ m, info, today }: { m: Member; info: MembershipInfo; today:
 }
 
 const useStyles = makeStyles((t) => ({
-  filterScroll: { flexGrow: 0, marginHorizontal: -gutter },
-  filters: { paddingHorizontal: gutter, gap: 8, paddingVertical: 14 },
-  list: { backgroundColor: t.c.surface, borderRadius: t.radius.lg, overflow: 'hidden', marginBottom: 24 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 11 },
-  sep: { height: 1, backgroundColor: t.c.line, marginLeft: 68 },
+  // flexShrink 0: without it the chip row is squashed by the list below and the chips lose their bottom edge.
+  filterScroll: { flexGrow: 0, flexShrink: 0, marginHorizontal: -gutter },
+  filters: { paddingHorizontal: gutter, gap: 8, paddingTop: 14, paddingBottom: 18 },
+  list: { backgroundColor: t.c.surface, borderRadius: t.radius.lg, overflow: 'hidden', marginBottom: 28 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
+  sep: { height: 1, backgroundColor: t.c.line, marginLeft: 74 },
 }));

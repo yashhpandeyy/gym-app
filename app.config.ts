@@ -25,6 +25,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     'expo-router',
+    // Phones are all arm64. Skipping the x86 and 32-bit builds of Skia keeps the cloud build inside its memory limit.
+    ['expo-build-properties', { android: { buildArchs: ['arm64-v8a'] } }],
     [
       'expo-splash-screen',
       {
