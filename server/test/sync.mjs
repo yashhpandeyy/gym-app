@@ -1,6 +1,6 @@
 // End-to-end checks against a running `wrangler dev`. Run: npm run db:local && npm run dev, then npm test.
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 const API = process.env.API ?? 'http://127.0.0.1:8787';
 const MASTER = process.env.ADMIN_TOKEN ?? 'dev-admin-token';
@@ -89,6 +89,60 @@ check('the admin can open a gym as its owner to set it up on the spot', opened.s
 check('the admin can reset a forgotten owner password', (await call('POST', `/v1/admin/gyms/${gymA.id}/password`, { token: admin, body: { password: 'fresh-pass-77' } })).status === 200);
 check('the old owner session is signed out by the reset', (await call('GET', '/v1/me', { token: ownerA })).status === 401);
 check('and the new password works', (await call('POST', '/v1/auth/owner-login', { body: { email: `asha${tag}@example.com`, password: 'fresh-pass-77' } })).status === 200);
+
+// Reset links: the owner picks their own password from a one-time link the admin sends.
+const emailA = `asha${tag}@example.com`;
+const ownerLogin = (password) => call('POST', '/v1/auth/owner-login', { body: { email: emailA, password } });
+const resetLink = () => call('POST', `/v1/admin/gyms/${gymA.id}/reset-link`, { token: admin });
+const tokenOf = (r) => decodeURIComponent(new URL(r.data.url).hash.slice(1));
+check('only an admin can make a reset link', (await call('POST', `/v1/admin/gyms/${gymA.id}/reset-link`)).status === 401);
+const link1 = await resetLink();
+check('the admin makes a one-time reset link', link1.status === 201 && /\/reset#[\w-]{40,}$/.test(link1.data.url) && link1.data.email === emailA, JSON.stringify(link1.data));
+const link2 = await resetLink();
+check('a new link cancels the earlier one', (await call('POST', '/v1/auth/reset/check', { body: { token: tokenOf(link1) } })).status === 410);
+const chk = await call('POST', '/v1/auth/reset/check', { body: { token: tokenOf(link2) } });
+check('the link shows which gym and email it is for', chk.status === 200 && chk.data.gymName === `Iron Temple ${tag}` && chk.data.email === emailA && chk.data.primaryColor === '#E4572E', JSON.stringify(chk.data));
+const page = await fetch(`${API}/reset`);
+check('the reset page loads with a strict script policy', page.status === 200 && (page.headers.get('content-security-policy') ?? '').includes("script-src 'nonce-") && (await page.text()).includes('/v1/auth/reset/check'));
+check('a short password is refused', (await call('POST', '/v1/auth/reset', { body: { token: tokenOf(link2), password: 'short' } })).status === 400);
+const before = (await ownerLogin('fresh-pass-77')).data.token;
+const used = await call('POST', '/v1/auth/reset', { body: { token: tokenOf(link2), password: 'link-pass-88' } });
+check('the owner sets a new password from the link', used.status === 200 && used.data.email === emailA, JSON.stringify(used.data));
+check('the link works only once', (await call('POST', '/v1/auth/reset', { body: { token: tokenOf(link2), password: 'again-pass-99' } })).status === 410);
+check('the owner is signed out everywhere by it', (await call('GET', '/v1/me', { token: before })).status === 401);
+check('the old password stops working', (await ownerLogin('fresh-pass-77')).status === 401);
+check('and the new one works', (await ownerLogin('link-pass-88')).status === 200);
+const link3 = await resetLink();
+sql(`UPDATE password_resets SET expires_at = 1 WHERE token_hash = '${hashOf(tokenOf(link3))}'`);
+check('an expired link is refused', (await call('POST', '/v1/auth/reset/check', { body: { token: tokenOf(link3) } })).status === 410);
+for (let i = 0; i < 6; i++) await ownerLogin('wrong-wrong-2');
+check('(the owner is locked out)', (await ownerLogin('link-pass-88')).status === 429);
+const link4 = await resetLink();
+check('a reset link lifts the lockout', (await call('POST', '/v1/auth/reset', { body: { token: tokenOf(link4), password: 'fresh-pass-77' } })).status === 200 && (await ownerLogin('fresh-pass-77')).status === 200);
+
+// The developer console: the page, one gym in full, and a backup without passwords.
+const consolePage = await fetch(`${API}/admin`);
+check('the developer console loads with a strict script policy', consolePage.status === 200 && (consolePage.headers.get('content-security-policy') ?? '').includes("script-src 'nonce-") && (await consolePage.text()).includes('Developer console'));
+const detail = await call('GET', `/v1/admin/gyms/${gymA.id}`, { token: admin });
+check('the admin sees one gym in full', detail.status === 200 && detail.data.gym.code === gymA.code && detail.data.people.some((p) => p.role === 'owner' && p.email === emailA) && Array.isArray(detail.data.records), JSON.stringify(detail.data).slice(0, 200));
+check('an owner can’t see the admin view of a gym', (await call('GET', `/v1/admin/gyms/${gymA.id}`, { token: (await ownerLogin('fresh-pass-77')).data.token })).status === 401);
+const exported = await call('GET', `/v1/admin/gyms/${gymA.id}/export`, { token: admin });
+check('a backup has the gym but no password hashes', exported.status === 200 && exported.data.gym.id === gymA.id && exported.data.users.length >= 1 && !JSON.stringify(exported.data).includes('hmac$'), JSON.stringify(exported.data).slice(0, 200));
+
+// Admin setup links: made straight in the database (scripts/admin-link.mjs), used once at /admin#setup=...
+const invite = () => {
+  const t = randomBytes(32).toString('base64url');
+  sql(`INSERT INTO admin_invites (token_hash, expires_at, created_at) VALUES ('${hashOf(t)}', ${Math.floor(Date.now() / 1000) + 3600}, '${new Date().toISOString()}')`);
+  return t;
+};
+const inv1 = invite();
+check('a setup link is recognised', (await call('POST', '/v1/admin/setup/check', { body: { token: inv1 } })).status === 200);
+check('a made-up setup link is refused', (await call('POST', '/v1/admin/setup/check', { body: { token: 'x'.repeat(43) } })).status === 410);
+check('a setup link can’t make an admin out of a gym owner’s email', (await call('POST', '/v1/admin/setup', { body: { token: inv1, name: 'Dev', email: emailA, password: 'dev-pass-123' } })).status === 409);
+const dev = await call('POST', '/v1/admin/setup', { body: { token: inv1, name: 'Dev Person', email: `dev${tag}@gmail.test`, password: 'dev-pass-123' } });
+check('a setup link creates an admin account and signs it in', dev.status === 201 && dev.data.token?.startsWith('adm.') && (await call('GET', '/v1/admin/gyms', { token: dev.data.token })).status === 200, JSON.stringify(dev.data));
+check('a setup link works only once', (await call('POST', '/v1/admin/setup', { body: { token: inv1, name: 'Dev Again', email: `dev2${tag}@gmail.test`, password: 'dev-pass-123' } })).status === 410);
+check('the new admin signs in with email and password', (await call('POST', '/v1/auth/owner-login', { body: { email: `dev${tag}@gmail.test`, password: 'dev-pass-123' } })).data.role === 'admin');
 const ownerToken = (await call('POST', '/v1/auth/owner-login', { body: { email: `asha${tag}@example.com`, password: 'fresh-pass-77' } })).data.token;
 
 // =============================================================================================
@@ -320,6 +374,20 @@ check('the admin suspends the gym', (await call('POST', `/v1/admin/gyms/${gymA.i
 check('suspended gym: members are cut off', (await call('GET', '/v1/sync?since=0', { token: P1.token })).data.error === 'gym_suspended');
 check('suspended gym: staff are cut off', (await call('GET', '/v1/sync?since=0', { token: staffA })).data.error === 'gym_suspended');
 check('suspended gym: the code shows nothing', (await call('GET', `/v1/gyms/${gymA.code}/public`)).status === 404);
+
+// =============================================================================================
+// Deleting a gym from the developer console
+// =============================================================================================
+const doomed = await call('POST', '/v1/admin/gyms', { token: admin, body: { gymName: `Short Lived ${tag}`, ownerName: 'Temp Owner', email: `temp${tag}@example.com`, password: 'temp-pass-123' } });
+const doomedOwner = (await call('POST', '/v1/auth/owner-login', { body: { email: `temp${tag}@example.com`, password: 'temp-pass-123' } })).data.token;
+check('(the gym to delete has data)', first(await push(doomedOwner, put('announcements', 'bye', { id: 'bye', title: 'Closing', body: 'Last day', kind: 'holiday', date: today, pinned: false }))).ok);
+check('deleting needs the gym code typed back', (await call('DELETE', `/v1/admin/gyms/${doomed.data.id}`, { token: admin, body: { confirm: 'NOPE' } })).status === 400);
+check('an owner can’t delete a gym', (await call('DELETE', `/v1/admin/gyms/${doomed.data.id}`, { token: doomedOwner, body: { confirm: doomed.data.code } })).status === 401);
+const deleted = await call('DELETE', `/v1/admin/gyms/${doomed.data.id}`, { token: admin, body: { confirm: doomed.data.code.toLowerCase() } });
+check('the admin deletes a gym and gets a backup', deleted.status === 200 && deleted.data.backup.gym.code === doomed.data.code && deleted.data.backup.docs.some((d) => d.kind === 'announcements'), JSON.stringify(deleted.data).slice(0, 200));
+check('the deleted gym is gone everywhere', (await call('GET', `/v1/admin/gyms/${doomed.data.id}`, { token: admin })).status === 404 && (await call('GET', `/v1/gyms/${doomed.data.code}/public`)).status === 404 && !(await call('GET', '/v1/admin/gyms', { token: admin })).data.gyms.some((g) => g.id === doomed.data.id));
+check('its owner is signed out and can’t sign in', (await call('GET', '/v1/me', { token: doomedOwner })).status === 401 && (await call('POST', '/v1/auth/owner-login', { body: { email: `temp${tag}@example.com`, password: 'temp-pass-123' } })).status === 401);
+check('other gyms are untouched', (await call('GET', `/v1/admin/gyms/${gymBRes.data.id}`, { token: admin })).status === 200);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

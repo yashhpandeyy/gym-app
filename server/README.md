@@ -45,6 +45,25 @@ Then point the app at it with `EXPO_PUBLIC_API_URL` (in a `.env` file at the rep
 
 Owner sign-ups go live straight away. To review each new gym by hand before it works, set the Worker variable `SIGNUP_REVIEW` to `on`; new gyms then stay `pending` until an admin activates them.
 
+## Developer console
+
+The Worker serves a console for platform admins at `/admin` (for example `https://your-worker.workers.dev/admin`). It lists every gym, newest first, and flags new gyms and possible duplicates (same gym name, owner name or phone). Open a gym to:
+
+- see the owner, staff, members, profile and what the gym has set up
+- send the owner a **one-time reset link** (`/reset#...`, works once for 24 hours) so they pick their own password, or set one yourself
+- pause or switch the gym back on
+- download a backup (JSON, no password hashes)
+- delete the gym for good: you type the gym code back to confirm, and a backup downloads first
+
+Sign in with an admin account. To make one without the master token, run this from `server/` while logged in to Cloudflare (`npx wrangler login`). It prints a one-time setup link where you pick your own email and password:
+
+```bash
+node scripts/admin-link.mjs           # the live server
+node scripts/admin-link.mjs --local   # npm run dev
+```
+
+The script writes straight to D1, so only someone with access to the Cloudflare account can make an admin.
+
 ## Why it costs nothing
 
 | Need | Free tool | Limit that matters |

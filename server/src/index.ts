@@ -33,11 +33,13 @@ import {
   type GymRow,
 } from './core';
 import { hashSecret, hmacCode, newId, randomDigits, randomToken, safeEqual, sha256, verifySecret } from './crypto';
+import { registerAdmin } from './admin';
 import { registerSync } from './sync';
 
 const app = new Hono<AppEnv>();
 app.use('*', cors({ origin: '*', allowHeaders: ['authorization', 'content-type'], exposeHeaders: ['x-session-token'], maxAge: 600 }));
 registerSync(app);
+registerAdmin(app);
 
 // ---------------------------------------------------------------------------
 // Public routes
@@ -459,8 +461,11 @@ app.post('/v1/admin/accounts', adminOnly, async (c) => {
 
 app.get('/v1/admin/gyms', adminOnly, async (c) => {
   const rows = await c.env.DB.prepare(
-    `SELECT g.id, g.code, g.name, g.status, g.created_at,
+    `SELECT g.id, g.code, g.name, g.status, g.created_at, g.primary_color,
             (SELECT COUNT(*) FROM members m WHERE m.gym_id = g.id) AS members,
+            (SELECT COUNT(*) FROM users u WHERE u.gym_id = g.id AND u.role = 'staff') AS staff,
+            (SELECT COUNT(*) FROM docs d WHERE d.gym_id = g.id AND d.kind = 'plans' AND d.deleted = 0) AS plans,
+            (SELECT MAX(s.created_at) FROM sessions s WHERE s.gym_id = g.id) AS last_sign_in,
             (SELECT u.email FROM users u WHERE u.gym_id = g.id AND u.role = 'owner' LIMIT 1) AS owner_email,
             (SELECT u.name FROM users u WHERE u.gym_id = g.id AND u.role = 'owner' LIMIT 1) AS owner_name,
             (SELECT u.phone FROM users u WHERE u.gym_id = g.id AND u.role = 'owner' LIMIT 1) AS owner_phone
