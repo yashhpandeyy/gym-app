@@ -127,12 +127,12 @@ type Actions = {
   /** Finishes adding a member the server has already created: payment, lead, referral reward. */
   addMember: (
     /** `paidOn`: when the money changed hands, for members entered after the fact. Today if missing. */
-    input: { paid: number; method: PayMethod; leadId?: string; paidOn?: ISODate; note?: string; tag?: string; dueDate?: ISODate },
+    input: { paid: number; method: PayMethod; leadId?: string; paidOn?: ISODate; tag?: string; dueDate?: ISODate },
     created: Member,
   ) => string;
   updateMember: (id: string, patch: Partial<Member>) => void;
   removeMember: (id: string) => void;
-  recordPayment: (memberId: string, amount: number, method: PayMethod, note?: string, dueDate?: ISODate) => Payment;
+  recordPayment: (memberId: string, amount: number, method: PayMethod, note?: string) => Payment;
   setSlotCapacity: (slotId: string, capacity: number) => void;
   addSlot: (input: { start: string; end: string; capacity: number; days: number[] }) => Result;
   updateSlot: (id: string, input: { start: string; end: string; capacity: number; days: number[] }) => Result;
@@ -740,10 +740,9 @@ export const useApp = create<AppState>()(
                     amount: input.paid,
                     method: input.method,
                     planId: plan?.id,
-                    note: input.note || (member.pricingTag ? `New joining (${member.pricingTag})` : 'New joining'),
-                    dueAmount: member.dues,
-                    dueDate: input.dueDate ?? member.duePaymentDate,
-                    tag: input.tag ?? member.pricingTag,
+                    note: 'New joining',
+                    tag: input.tag,
+                    dueDate: input.dueDate,
                   },
                 ]
               : s.payments;
@@ -783,10 +782,8 @@ export const useApp = create<AppState>()(
             pauses: s.pauses.filter((p) => p.memberId !== id),
           });
         },
-        recordPayment: (memberId, amount, method, note, dueDate) => {
+        recordPayment: (memberId, amount, method, note) => {
           const s = get();
-          const target = s.members.find((m) => m.id === memberId);
-          const newDues = target ? Math.max(0, target.dues - amount) : 0;
           const payment: Payment = {
             id: uid('pay'),
             memberId,
@@ -794,31 +791,12 @@ export const useApp = create<AppState>()(
             date: today(),
             amount,
             method,
-            note: note || (newDues === 0 ? 'Dues cleared' : 'Partial dues payment'),
-            dueAmount: newDues,
-            dueDate: newDues > 0 ? (dueDate ?? target?.duePaymentDate) : undefined,
-            tag: target?.pricingTag,
+            note: note || 'Dues cleared',
           };
           set({
             payments: [...s.payments, payment],
-            members: s.members.map((m) =>
-              m.id === memberId
-                ? {
-                    ...m,
-                    dues: newDues,
-                    duePaymentDate: newDues > 0 ? (dueDate !== undefined ? dueDate : m.duePaymentDate) : undefined,
-                  }
-                : m,
-            ),
-            notices: [
-              notice(
-                memberId,
-                'Payment received',
-                `${money(amount)} by ${method}. Invoice ${payment.invoice}.${newDues > 0 ? ` ${money(newDues)} remaining.` : ''}`,
-                'payment',
-              ),
-              ...s.notices,
-            ],
+            members: s.members.map((m) => (m.id === memberId ? { ...m, dues: Math.max(0, m.dues - amount) } : m)),
+            notices: [notice(memberId, 'Payment received', `${money(amount)} by ${method}. Invoice ${payment.invoice}.`, 'payment'), ...s.notices],
           });
           return payment;
         },

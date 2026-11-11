@@ -368,6 +368,7 @@ async function inviteReply(c: Ctx, gymId: string, member: { id: string; name: st
   };
 }
 
+/** Fields the gym may set on a new member's record. The server adds the id and the member number. */
 const NEW_MEMBER_FIELDS = [
   'gender', 'joinedOn', 'planId', 'startDate', 'endDate', 'pauseAllowance', 'dues',
   'preferredSlotId', 'trainerId', 'goalWeight', 'notes', 'weeklyGoal', 'referredBy',

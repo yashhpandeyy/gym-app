@@ -1,0 +1,703 @@
+<!doctype html>
+<!--
+  Developer console for the platform admin, served at /admin by the API Worker.
+  Signs in with an admin account (email + password). The first account comes from a one-time setup
+  link (/admin#setup=<token>) made by `node scripts/admin-link.mjs`.
+  All gym data is built into the page with textContent, never as HTML.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Developer console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #2F45FF; --on-accent: #fff;
+    --bg: #F4F4F7; --surface: #fff; --surface-2: #F0F0F4; --ink: #15161B; --soft: #5E606C; --faint: #868896;
+    --line: #E2E2EA; --field: #8A8C99; --rail: #15161B; --on-rail: #F2F2F5;
+    --ok: #1B7F3B; --warn: #9A5800; --danger: #C62828;
+    --radius: 14px; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 6px 20px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --accent: #7A86FF; --on-accent: #0E0F13;
+      --bg: #0E0F13; --surface: #18191F; --surface-2: #202128; --ink: #F2F2F5; --soft: #A6A8B4; --faint: #7C7E8A;
+      --line: #2A2B33; --field: #6E7080; --rail: #08090C;
+      --ok: #5BD48A; --warn: #F0B04A; --danger: #FF6B6B; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 Figtree, system-ui, sans-serif; -webkit-text-size-adjust: 100%; }
+  h1, h2, h3 { font-family: 'Bricolage Grotesque', Figtree, sans-serif; font-weight: 700; margin: 0; line-height: 1.2; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+  .muted { color: var(--soft); }
+  .small { font-size: 13px; }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 13px; }
+
+  /* Buttons and fields */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 600; white-space: nowrap; }
+  .btn:hover { border-color: var(--field); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .btn.ghost-danger { color: var(--danger); }
+  .btn.small { min-height: 32px; padding: 0 10px; font-size: 13px; border-radius: 8px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .field { display: block; margin-bottom: 14px; }
+  .field > span { display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; }
+  .input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1.5px solid var(--field); border-radius: 10px; background: transparent; }
+  .input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; min-width: 0; }
+  .err { color: var(--danger); font-size: 14px; margin: 0 0 12px; }
+  .err:empty { display: none; }
+
+  /* Sign-in */
+  .auth { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+  .auth .card { width: 100%; max-width: 400px; background: var(--surface); border-radius: 20px; padding: 28px 22px; box-shadow: var(--shadow); border: 1px solid var(--line); }
+  .mark { width: 40px; height: 40px; border-radius: 11px; background: var(--rail); color: var(--on-rail); display: grid; place-items: center; font: 700 18px 'Bricolage Grotesque', sans-serif; margin-bottom: 16px; }
+  .auth h1 { font-size: 26px; margin-bottom: 4px; }
+  .auth .lede { color: var(--soft); margin: 0 0 22px; }
+  .auth .btn.primary { width: 100%; min-height: 48px; }
+
+  /* Top bar */
+  .bar { position: sticky; top: 0; z-index: 5; background: var(--rail); color: var(--on-rail); }
+  .bar .in { max-width: 1180px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+  .bar .mark { width: 32px; height: 32px; font-size: 15px; margin: 0; background: var(--accent); color: var(--on-accent); border-radius: 9px; }
+  .bar h1 { font-size: 17px; }
+  .bar .who { margin-left: auto; font-size: 13px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .btn { background: transparent; color: var(--on-rail); border-color: rgba(255,255,255,.2); min-height: 34px; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+  .stat b { display: block; font: 700 28px/1.1 'Bricolage Grotesque', sans-serif; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--soft); font-size: 13px; }
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .tools .input { flex: 1; min-width: 200px; }
+  .seg { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
+  .seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 13px; color: var(--soft); min-height: 34px; }
+  .seg button[aria-pressed=true] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+  /* Gym list */
+  .list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .head, .gym { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) 92px; gap: 14px; align-items: center; padding: 12px 16px; }
+  .head { font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--line); padding-top: 10px; padding-bottom: 10px; }
+  .gym { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: transparent; }
+  .gym:last-child { border-bottom: 0; }
+  .gym:hover { background: var(--surface-2); }
+  .gym .name { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+  .sw { width: 30px; height: 30px; border-radius: 8px; flex: none; background: var(--accent); }
+  .gym .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gym .s { color: var(--soft); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 3px; }
+  .tag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--soft); }
+  .tag.new { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  .tag.dup { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+  .pill { justify-self: start; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .pill.active { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+  .pill.pending { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .pill.suspended { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+  .empty { padding: 40px 16px; text-align: center; color: var(--soft); }
+
+  @media (max-width: 760px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .head { display: none; }
+    .gym { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'name pill' 'owner owner' 'nums when'; gap: 6px 10px; }
+    .gym .c-name { grid-area: name; } .gym .c-owner { grid-area: owner; padding-left: 40px; }
+    .gym .c-nums { grid-area: nums; padding-left: 40px; } .gym .c-when { grid-area: when; justify-self: end; }
+    .gym .pill { grid-area: pill; }
+    .bar .who { display: none; }
+    .tools .input { flex-basis: 100%; }
+    .seg { flex: 1 1 100%; }
+    .seg button { flex: 1; }
+    #refresh, #newGym { flex: 1; }
+  }
+
+  /* Drawer and dialogs */
+  dialog { border: 0; padding: 0; color: var(--ink); background: var(--surface); }
+  dialog::backdrop { background: rgba(10, 10, 14, .45); }
+  dialog.drawer { margin: 0 0 0 auto; height: 100%; max-height: 100%; width: min(600px, 100%); max-width: 100%; box-shadow: -10px 0 40px rgba(0,0,0,.2); }
+  dialog.modal { width: min(460px, calc(100% - 32px)); border-radius: 18px; padding: 22px 20px; }
+  dialog.modal h2 { font-size: 21px; margin-bottom: 8px; }
+  dialog.modal p { margin: 0 0 14px; }
+  dialog.modal .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; flex-wrap: wrap; }
+  .dh { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--line); padding: 16px 18px; display: flex; gap: 12px; align-items: center; }
+  .dh .logo { width: 48px; height: 48px; border-radius: 12px; flex: none; object-fit: cover; }
+  .dh h2 { font-size: 21px; overflow-wrap: anywhere; }
+  .x { margin-left: auto; align-self: flex-start; width: 36px; height: 36px; border-radius: 10px; border: 0; background: var(--surface-2); font-size: 20px; line-height: 1; flex: none; }
+  .db { padding: 4px 18px 40px; }
+  .sec { padding: 18px 0; border-bottom: 1px solid var(--line); }
+  .sec:last-child { border-bottom: 0; }
+  .sec > h3 { font-size: 15px; margin-bottom: 10px; }
+  .kv { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 6px 12px; font-size: 14px; }
+  .kv dt { color: var(--soft); }
+  .kv dd { margin: 0; overflow-wrap: anywhere; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { background: var(--surface-2); border-radius: 8px; padding: 4px 10px; font-size: 13px; }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .linkbox { background: var(--surface-2); border-radius: 12px; padding: 12px; margin-top: 12px; }
+  .linkbox .input { font-size: 13px; min-height: 38px; margin-bottom: 8px; }
+  .people { display: grid; gap: 1px; background: var(--line); border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+  .person { background: var(--surface); padding: 8px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; font-size: 14px; }
+  .person .meta { color: var(--soft); font-size: 13px; }
+  .danger-zone { border: 1.5px solid color-mix(in srgb, var(--danger) 40%, transparent); border-radius: 12px; padding: 14px; margin-top: 4px; }
+  .danger-zone p { margin: 0 0 10px; font-size: 14px; color: var(--soft); }
+
+  .toasts { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 18px); transform: translateX(-50%); display: grid; gap: 8px; z-index: 100; width: min(440px, calc(100% - 32px)); pointer-events: none; }
+  .toast { background: var(--rail); color: var(--on-rail); padding: 11px 14px; border-radius: 12px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .toast.error { background: var(--danger); color: #fff; }
+</style>
+</head>
+<body>
+
+<section class="auth" id="auth" hidden>
+  <div class="card">
+    <div class="mark" aria-hidden="true">D</div>
+    <form id="loginForm" novalidate>
+      <h1>Developer console</h1>
+      <p class="lede">Sign in with your platform admin account.</p>
+      <label class="field"><span>Email or username</span><input class="input" id="loginEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+      <label class="field"><span>Password</span><input class="input" id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <p class="err" id="loginErr" role="alert"></p>
+      <button class="btn primary" type="submit" id="loginGo">Sign in</button>
+    </form>
+    <form id="setupForm" novalidate hidden>
+      <h1>Create your admin account</h1>
+      <p class="lede" id="setupLede">This setup link works once.</p>
+      <label class="field"><span>Your name</span><input class="input" id="setupName" autocomplete="name" maxlength="60" required></label>
+      <label class="field"><span>Email or username</span><input class="input" id="setupEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120" required></label>
+      <label class="field"><span>Password (8 or more characters)</span><input class="input" id="setupPassword" type="password" autocomplete="new-password" maxlength="100" required></label>
+      <label class="field"><span>Type it again</span><input class="input" id="setupPassword2" type="password" autocomplete="new-password" maxlength="100" required></label>
+      <p class="err" id="setupErr" role="alert"></p>
+      <button class="btn primary" type="submit" id="setupGo">Create account and sign in</button>
+    </form>
+  </div>
+</section>
+
+<div id="main" hidden>
+  <header class="bar"><div class="in">
+    <div class="mark" aria-hidden="true">D</div>
+    <h1>Developer console</h1>
+    <span class="who" id="who"></span>
+    <button class="btn small" id="signOut" type="button">Sign out</button>
+  </div></header>
+  <main class="wrap">
+    <div class="stats" id="stats"></div>
+    <div class="tools">
+      <input class="input" id="search" type="search" placeholder="Search gym, code, owner, email or phone" aria-label="Search gyms">
+      <div class="seg" role="group" aria-label="Filter by status" id="seg">
+        <button type="button" data-f="all" aria-pressed="true">All</button>
+        <button type="button" data-f="active" aria-pressed="false">Live</button>
+        <button type="button" data-f="pending" aria-pressed="false">Waiting</button>
+        <button type="button" data-f="suspended" aria-pressed="false">Paused</button>
+      </div>
+      <button class="btn" id="refresh" type="button">Refresh</button>
+      <button class="btn primary" id="newGym" type="button">New gym</button>
+    </div>
+    <div class="list" id="list" aria-live="polite"></div>
+  </main>
+</div>
+
+<dialog class="drawer" id="drawer" aria-labelledby="drawerTitle"></dialog>
+<dialog class="modal" id="modal"></dialog>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script nonce="__NONCE__">
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const KEY = 'gymConsole';
+  const LABEL = { active: 'Live', pending: 'Waiting', suspended: 'Paused' };
+  const DAY = 86400000;
+
+  // ---------------------------------------------------------------- helpers
+  function h(tag, props, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat(3)) if (kid != null && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
+    return el;
+  }
+  const store = {
+    get() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } },
+    set(v) { try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch {} },
+  };
+  const isHex = (c) => /^#[0-9a-f]{6}$/i.test(c || '');
+  const digits = (s) => String(s || '').replace(/\D/g, '');
+  const fmtDate = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+  const fmtTime = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const when = (iso) => (iso ? fmtTime.format(new Date(iso)) : '');
+  function ago(iso) {
+    if (!iso) return '';
+    const s = (Date.now() - Date.parse(iso)) / 1000;
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+    if (s < 2 * 86400) return 'yesterday';
+    if (s < 30 * 86400) return `${Math.floor(s / 86400)} days ago`;
+    return fmtDate.format(new Date(iso));
+  }
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + 's'}`;
+  const dupText = (codes) => `Possible duplicate of ${codes.slice(0, 2).join(', ')}${codes.length > 2 ? ` +${codes.length - 2} more` : ''}`;
+
+  function toast(msg, kind) {
+    const t = h('div', { class: `toast ${kind || ''}`, role: kind === 'error' ? 'alert' : 'status' }, msg);
+    $('toasts').append(t);
+    setTimeout(() => t.remove(), kind === 'error' ? 6000 : 3500);
+  }
+  async function copy(text, input) {
+    try { await navigator.clipboard.writeText(text); toast('Copied'); }
+    catch { if (input) { input.focus(); input.select(); } toast('Press Ctrl+C to copy'); }
+  }
+  function whatsapp(phone, text) {
+    const d = digits(phone);
+    const to = d.length === 10 ? `91${d}` : d.length > 10 ? d : '';
+    window.open(`https://wa.me/${to}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+  }
+  function download(name, data) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    const a = h('a', { href: url, download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+  function newPassword() {
+    const set = 'abcdefghjkmnpqrstuvwxyz23456789';
+    const buf = crypto.getRandomValues(new Uint32Array(12));
+    const s = [...buf].map((n) => set[n % set.length]).join('');
+    return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8)}`;
+  }
+  const stamp = () => new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+
+  // ---------------------------------------------------------------- api
+  let auth = store.get();
+  async function api(method, path, body) {
+    let res;
+    try {
+      res = await fetch(path, {
+        method,
+        headers: { 'content-type': 'application/json', ...(auth ? { authorization: `Bearer ${auth.token}` } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      return { ok: false, status: 0, data: { message: 'Couldn’t reach the server. Check your internet.' } };
+    }
+    const fresh = res.headers.get('x-session-token');
+    if (fresh && auth) { auth = { ...auth, token: fresh }; store.set(auth); }
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && auth && path.startsWith('/v1/admin/')) signOut('Your session ended. Sign in again.');
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  // ---------------------------------------------------------------- sign-in and setup
+  function showAuth(mode) {
+    $('main').hidden = true;
+    $('auth').hidden = false;
+    $('loginForm').hidden = mode === 'setup';
+    $('setupForm').hidden = mode !== 'setup';
+    (mode === 'setup' ? $('setupName') : $('loginEmail')).focus();
+  }
+  function signOut(msg) {
+    auth = null; store.set(null); gyms = [];
+    if ($('drawer').open) $('drawer').close();
+    if ($('modal').open) $('modal').close();
+    showAuth('login');
+    if (msg) toast(msg, 'error');
+  }
+  function signedIn(token, name) {
+    auth = { token, name }; store.set(auth);
+    $('auth').hidden = true; $('main').hidden = false;
+    $('who').textContent = name ? `Signed in as ${name}` : '';
+    loadGyms();
+  }
+  async function busy(btn, label, fn) {
+    const was = btn.textContent;
+    btn.disabled = true; btn.textContent = label;
+    try { return await fn(); } finally { btn.disabled = false; btn.textContent = was; }
+  }
+
+  $('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const err = $('loginErr');
+    const email = $('loginEmail').value.trim(), password = $('loginPassword').value;
+    if (!email || !password) { err.textContent = 'Enter your email or username, and your password.'; return; }
+    err.textContent = '';
+    busy($('loginGo'), 'Signing in…', async () => {
+      const r = await api('POST', '/v1/auth/owner-login', { email, password });
+      if (!r.ok) { err.textContent = r.data.message || 'Couldn’t sign in.'; return; }
+      if (r.data.role !== 'admin') { err.textContent = 'That is a gym owner account. Use your admin account here.'; return; }
+      $('loginPassword').value = '';
+      signedIn(r.data.token, r.data.name);
+    });
+  });
+
+  let setupToken = '';
+  $('setupForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const err = $('setupErr');
+    const name = $('setupName').value.trim(), email = $('setupEmail').value.trim(), password = $('setupPassword').value;
+    if (name.length < 2) { err.textContent = 'Enter your name.'; return; }
+    if (!/^\S+@\S+\.\S{2,}$/.test(email) && !/^[a-z0-9][a-z0-9._-]{2,39}$/i.test(email)) { err.textContent = 'Enter an email, or a username of 3 to 40 letters, digits, dots, dashes or underscores.'; return; }
+    if (password.length < 8) { err.textContent = 'Use a password of 8 or more characters.'; return; }
+    if (password !== $('setupPassword2').value) { err.textContent = 'The two passwords don’t match.'; return; }
+    err.textContent = '';
+    busy($('setupGo'), 'Creating…', async () => {
+      const r = await api('POST', '/v1/admin/setup', { token: setupToken, name, email, password });
+      if (!r.ok) { err.textContent = r.data.message || 'Couldn’t create the account.'; return; }
+      history.replaceState(null, '', location.pathname);
+      toast('Admin account created. Sign in with it from now on.');
+      signedIn(r.data.token, r.data.name);
+    });
+  });
+
+  $('signOut').addEventListener('click', () => signOut());
+
+  // ---------------------------------------------------------------- gym list
+  let gyms = [];
+  let dupes = new Map();
+  let filter = 'all';
+
+  function findDupes(list) {
+    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/gym|fitness|club|the/g, '');
+    const out = new Map();
+    for (const a of list) for (const b of list) {
+      if (a.id === b.id) continue;
+      const same = (norm(a.name) && norm(a.name) === norm(b.name))
+        || (norm(a.owner_name) && norm(a.owner_name) === norm(b.owner_name))
+        || (digits(a.owner_phone).length >= 10 && digits(a.owner_phone) === digits(b.owner_phone));
+      if (same) out.set(a.id, [...(out.get(a.id) || []), b.code]);
+    }
+    return out;
+  }
+
+  async function loadGyms() {
+    const r = await api('GET', '/v1/admin/gyms');
+    if (!r.ok) {
+      if (r.status !== 401) $('list').replaceChildren(h('div', { class: 'empty' }, r.data.message || 'Couldn’t load gyms.', ' ', h('button', { class: 'btn small', type: 'button', onclick: loadGyms }, 'Try again')));
+      return;
+    }
+    gyms = r.data.gyms || [];
+    dupes = findDupes(gyms);
+    renderStats();
+    renderList();
+    const m = /^#gym=(.+)$/.exec(location.hash);
+    if (m && !$('drawer').open) openGym(decodeURIComponent(m[1]));
+  }
+
+  function renderStats() {
+    const count = (s) => gyms.filter((g) => g.status === s).length;
+    const recent = (iso) => iso && Date.now() - Date.parse(iso) < 7 * DAY;
+    const tile = (n, label) => h('div', { class: 'stat' }, h('b', null, n), h('span', null, label));
+    $('stats').replaceChildren(
+      tile(gyms.length, `Gyms · ${count('active')} live, ${count('suspended')} paused${count('pending') ? `, ${count('pending')} waiting` : ''}`),
+      tile(gyms.filter((g) => recent(g.created_at)).length, 'New in the last 7 days'),
+      tile(gyms.reduce((n, g) => n + (g.members || 0), 0), 'Members on all gyms'),
+      tile(gyms.filter((g) => recent(g.last_sign_in)).length, 'Gyms signed in this week'),
+    );
+  }
+
+  function renderList() {
+    const q = $('search').value.trim().toLowerCase();
+    const qd = digits(q);
+    const shown = gyms.filter((g) => (filter === 'all' || g.status === filter) && (!q
+      || [g.name, g.code, g.owner_name, g.owner_email].some((v) => String(v || '').toLowerCase().includes(q))
+      || (qd.length >= 3 && digits(g.owner_phone).includes(qd))));
+    const list = $('list');
+    if (!gyms.length) return list.replaceChildren(h('div', { class: 'empty' }, 'No gyms yet. Use “New gym” when an owner says yes.'));
+    if (!shown.length) return list.replaceChildren(h('div', { class: 'empty' }, 'No gyms match.'));
+    list.replaceChildren(
+      h('div', { class: 'head', 'aria-hidden': 'true' }, h('span', null, 'Gym'), h('span', null, 'Owner'), h('span', null, 'Set up'), h('span', null, 'Joined'), h('span', null, 'Status')),
+      ...shown.map((g) => {
+        const isNew = g.created_at && Date.now() - Date.parse(g.created_at) < 3 * DAY;
+        const dup = dupes.get(g.id);
+        return h('button', { class: 'gym', type: 'button', onclick: () => openGym(g.id) },
+          h('div', { class: 'name c-name' },
+            h('span', { class: 'sw', style: isHex(g.primary_color) ? `background:${g.primary_color}` : null }),
+            h('div', { style: 'min-width:0' },
+              h('div', { class: 't' }, g.name),
+              h('div', { class: 's mono' }, g.code),
+              (isNew || dup) && h('div', { class: 'tags' }, isNew && h('span', { class: 'tag new' }, 'New'), dup && h('span', { class: 'tag dup', title: `Same gym name, owner name or phone as ${dup.join(', ')}` }, dupText(dup))))),
+          h('div', { class: 'c-owner', style: 'min-width:0' }, h('div', { class: 't' }, g.owner_name || 'No owner'), h('div', { class: 's' }, g.owner_email || g.owner_phone || '')),
+          h('div', { class: 'c-nums s' }, `${plural(g.members || 0, 'member')} · ${plural(g.plans || 0, 'plan')}`),
+          h('div', { class: 'c-when s', title: when(g.created_at) }, ago(g.created_at)),
+          h('span', { class: `pill ${g.status}` }, LABEL[g.status] || g.status));
+      }));
+  }
+
+  $('search').addEventListener('input', renderList);
+  $('seg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-f]');
+    if (!b) return;
+    filter = b.dataset.f;
+    for (const x of $('seg').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+    renderList();
+  });
+  $('refresh').addEventListener('click', () => busy($('refresh'), 'Refreshing…', loadGyms));
+
+  // ---------------------------------------------------------------- one gym
+  let openId = null;
+  const drawer = $('drawer');
+  drawer.addEventListener('close', () => { openId = null; if (location.hash.startsWith('#gym=')) history.replaceState(null, '', location.pathname); });
+  const outside = (dlg, e) => { const r = dlg.getBoundingClientRect(); return e.target === dlg && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom); };
+  drawer.addEventListener('click', (e) => { if (outside(drawer, e)) drawer.close(); });
+
+  async function openGym(id) {
+    openId = id;
+    history.replaceState(null, '', `#gym=${encodeURIComponent(id)}`);
+    drawer.replaceChildren(h('div', { class: 'dh' }, h('h2', { id: 'drawerTitle' }, 'Loading…'), h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: () => drawer.close() }, '×')));
+    if (!drawer.open) drawer.showModal();
+    const r = await api('GET', `/v1/admin/gyms/${encodeURIComponent(id)}`);
+    if (openId !== id) return;
+    if (!r.ok) {
+      drawer.replaceChildren(h('div', { class: 'dh' }, h('h2', { id: 'drawerTitle' }, 'Gym not found'), h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: () => drawer.close() }, '×')), h('p', { class: 'db err' }, r.data.message || ''));
+      return;
+    }
+    renderGym(r.data);
+  }
+
+  function renderGym(d) {
+    const g = d.gym;
+    const owner = d.people.find((p) => p.role === 'owner') || {};
+    const staff = d.people.filter((p) => p.role === 'staff');
+    const p = g.profile || {};
+    const contact = p.contact || {}, address = p.address || {};
+    const dup = dupes.get(g.id);
+    const memberCount = d.members.length;
+    const recordCount = d.records.reduce((n, r) => n + r.n, 0);
+
+    const copyBtn = (text) => text && h('button', { class: 'btn small', type: 'button', onclick: () => copy(text) }, 'Copy');
+    const kv = (rows) => h('dl', { class: 'kv' }, rows.filter((r) => r && r[1]).map(([k, v, extra]) => [h('dt', null, k), h('dd', null, h('span', null, v), extra)]));
+    const sec = (title, ...kids) => h('section', { class: 'sec' }, h('h3', null, title), ...kids);
+
+    // Password
+    const linkBox = h('div', { hidden: true });
+    const passwordSec = sec('Password',
+      h('p', { class: 'muted small', style: 'margin:0 0 10px' }, 'Owner forgot their password? Send them a one-time link and they choose a new one. You never see it.'),
+      d.resetLinkUntil && h('p', { class: 'small', style: 'margin:0 0 10px' }, `A reset link is open until ${when(d.resetLinkUntil)}. Making a new one cancels it.`),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn primary', type: 'button', onclick: (e) => makeLink(e.currentTarget) }, 'Make reset link'),
+        h('button', { class: 'btn', type: 'button', onclick: () => setPasswordDialog(g, owner) }, 'Set a password myself')),
+      linkBox);
+
+    async function makeLink(btn) {
+      await busy(btn, 'Making…', async () => {
+        const r = await api('POST', `/v1/admin/gyms/${encodeURIComponent(g.id)}/reset-link`);
+        if (!r.ok) return toast(r.data.message || 'Couldn’t make a link.', 'error');
+        const input = h('input', { class: 'input mono', readonly: true, value: r.data.url, 'aria-label': 'Reset link', onfocus: (e) => e.target.select() });
+        const msg = `Hi ${owner.name || ''}, here is a link to set a new password for ${g.name}:\n${r.data.url}\n\nIt works once, until ${when(r.data.expiresAt)}. Then sign in with ${r.data.email || 'your email'}.`;
+        linkBox.className = 'linkbox';
+        linkBox.hidden = false;
+        linkBox.replaceChildren(input,
+          h('div', { class: 'row' },
+            h('button', { class: 'btn small primary', type: 'button', onclick: () => copy(r.data.url, input) }, 'Copy link'),
+            h('button', { class: 'btn small', type: 'button', onclick: () => copy(msg) }, 'Copy message'),
+            h('button', { class: 'btn small', type: 'button', onclick: () => whatsapp(owner.phone || contact.whatsapp || contact.phone, msg) }, 'Send on WhatsApp')),
+          h('p', { class: 'small muted', style: 'margin:8px 0 0' }, `Works once, until ${when(r.data.expiresAt)}.`));
+      });
+    }
+
+    drawer.replaceChildren(
+      h('div', { class: 'dh' },
+        g.logoUrl ? h('img', { class: 'logo', src: g.logoUrl, alt: '', onerror: (e) => { e.target.replaceWith(h('span', { class: 'sw', style: `width:48px;height:48px;border-radius:12px;${isHex(g.primaryColor) ? `background:${g.primaryColor}` : ''}` })); } })
+          : h('span', { class: 'sw', style: `width:48px;height:48px;border-radius:12px;${isHex(g.primaryColor) ? `background:${g.primaryColor}` : ''}` }),
+        h('div', { style: 'min-width:0' },
+          h('h2', { id: 'drawerTitle' }, g.name),
+          h('div', { class: 'row small muted', style: 'margin-top:4px;gap:8px' }, h('span', { class: 'mono' }, g.code), h('span', { class: `pill ${g.status}` }, LABEL[g.status] || g.status), h('span', null, `Joined ${when(g.createdAt)}`))),
+        h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: () => drawer.close() }, '×')),
+      h('div', { class: 'db' },
+        dup && h('p', { class: 'small', style: 'margin:14px 0 0;color:var(--warn)' }, `${dupText(dup)}: same gym name, owner name or phone.`),
+        sec('Owner',
+          kv([['Name', owner.name], ['Email', owner.email, copyBtn(owner.email)], ['Phone', owner.phone, copyBtn(owner.phone)], ['Gym code', g.code, copyBtn(g.code)]]),
+          staff.length > 0 && h('div', { style: 'margin-top:12px' }, h('p', { class: 'small muted', style: 'margin:0 0 6px' }, `Front desk staff (${staff.length})`),
+            h('div', { class: 'people' }, staff.map((s) => h('div', { class: 'person' }, h('span', null, s.name), h('span', { class: 'meta mono' }, s.phone)))))),
+        passwordSec,
+        sec('Gym details',
+          (contact.phone || contact.email || address.line1 || (p.hours || []).length)
+            ? kv([
+                ['Tagline', g.tagline],
+                ['Phone', contact.phoneDisplay || contact.phone],
+                ['WhatsApp', contact.whatsapp],
+                ['Email', contact.email],
+                ['Instagram', contact.instagram && `@${contact.instagram}`],
+                ['Address', [address.line1, address.line2].filter(Boolean).join(', ')],
+                ['Hours', (p.hours || []).map((x) => `${x.label} ${x.open}–${x.close}`).join('; ')],
+                ['Amenities', (p.amenities || []).join(', ')],
+              ])
+            : h('p', { class: 'muted small', style: 'margin:0' }, 'The owner hasn’t filled in contact, address or hours yet.')),
+        sec('What it has',
+          h('div', { class: 'chips' },
+            h('span', { class: 'chip' }, h('b', null, memberCount), memberCount === 1 ? ' member' : ' members'),
+            h('span', { class: 'chip' }, h('b', null, staff.length), ' staff'),
+            d.records.filter((r) => r.kind !== 'members' && r.kind !== 'settings').map((r) => h('span', { class: 'chip' }, h('b', null, r.n), ` ${r.n === 1 ? r.kind.replace(/s$/, '') : r.kind}`))),
+          h('p', { class: 'small muted', style: 'margin:10px 0 0' },
+            d.sessions.length ? `Signed in now: ${d.sessions.map((s) => `${plural(s.n, s.role)}`).join(', ')}. Last sign-in ${ago(d.sessions.map((s) => s.last).sort().pop())}.` : 'Nobody is signed in right now.')),
+        memberCount > 0 && membersSec(d.members),
+        sec('Status',
+          h('p', { class: 'muted small', style: 'margin:0 0 10px' }, g.status === 'active'
+            ? 'Pausing locks out the owner, staff and members, and hides the gym code. Nothing is deleted.'
+            : 'Switching on lets the owner, staff and members back in.'),
+          g.status === 'active'
+            ? h('button', { class: 'btn', type: 'button', onclick: (e) => setStatus(e.currentTarget, g, 'suspended') }, 'Pause gym')
+            : h('button', { class: 'btn primary', type: 'button', onclick: (e) => setStatus(e.currentTarget, g, 'active') }, 'Switch on')),
+        sec('Backup',
+          h('p', { class: 'muted small', style: 'margin:0 0 10px' }, 'Everything about this gym as a JSON file: profile, logins (no passwords), members, plans, payments and the rest.'),
+          h('button', { class: 'btn', type: 'button', onclick: (e) => busy(e.currentTarget, 'Preparing…', async () => {
+            const r = await api('GET', `/v1/admin/gyms/${encodeURIComponent(g.id)}/export`);
+            if (!r.ok) return toast(r.data.message || 'Couldn’t make the backup.', 'error');
+            download(`${g.code}-backup-${stamp()}.json`, r.data);
+          }) }, 'Download backup')),
+        h('section', { class: 'sec' },
+          h('div', { class: 'danger-zone' },
+            h('h3', { style: 'font-size:15px;margin-bottom:6px;color:var(--danger)' }, 'Delete gym'),
+            h('p', null, `Removes ${g.name}, its owner and staff logins, ${plural(memberCount, 'member')} and ${plural(recordCount, 'record')} for good. A backup downloads first.`),
+            h('button', { class: 'btn ghost-danger', type: 'button', onclick: () => deleteDialog(g, memberCount, recordCount) }, 'Delete this gym…')))));
+  }
+
+  function membersSec(members) {
+    const box = h('div', { class: 'people' });
+    const draw = (all) => box.replaceChildren(...(all ? members : members.slice(0, 8)).map((m) =>
+      h('div', { class: 'person' }, h('span', null, m.name), h('span', { class: 'meta mono' }, m.code || ''), h('span', { class: 'meta mono' }, m.phone), h('span', { class: 'meta' }, `joined ${fmtDate.format(new Date(m.created_at))}`))));
+    draw(false);
+    const more = members.length > 8 && h('button', { class: 'btn small', type: 'button', style: 'margin-top:8px', onclick: (e) => { draw(true); e.currentTarget.remove(); } }, `Show all ${members.length}`);
+    return h('section', { class: 'sec' }, h('h3', null, `Members (${members.length}${members.length >= 500 ? '+' : ''})`), box, more);
+  }
+
+  async function setStatus(btn, g, status) {
+    await busy(btn, 'Saving…', async () => {
+      const r = await api('POST', `/v1/admin/gyms/${encodeURIComponent(g.id)}/status`, { status });
+      if (!r.ok) return toast(r.data.message || 'Couldn’t change the status.', 'error');
+      toast(status === 'active' ? `${g.name} is live.` : `${g.name} is paused.`);
+      await loadGyms();
+      openGym(g.id);
+    });
+  }
+
+  // ---------------------------------------------------------------- dialogs
+  const modal = $('modal');
+  modal.addEventListener('click', (e) => { if (outside(modal, e)) modal.close(); });
+  function openModal(...kids) { modal.replaceChildren(...kids); modal.showModal(); }
+  const cancel = () => h('button', { class: 'btn', type: 'button', onclick: () => modal.close() }, 'Cancel');
+
+  function setPasswordDialog(g, owner) {
+    const input = h('input', { class: 'input mono', id: 'pwNew', autocomplete: 'off', maxlength: '100', value: newPassword() });
+    const err = h('p', { class: 'err', role: 'alert' });
+    const go = h('button', { class: 'btn primary', type: 'submit' }, 'Set password');
+    openModal(h('form', { novalidate: true, onsubmit: (e) => {
+      e.preventDefault();
+      const password = input.value;
+      if (password.length < 8) { err.textContent = 'Use 8 or more characters.'; return; }
+      busy(go, 'Saving…', async () => {
+        const r = await api('POST', `/v1/admin/gyms/${encodeURIComponent(g.id)}/password`, { password });
+        if (!r.ok) { err.textContent = r.data.message || 'Couldn’t set it.'; return; }
+        const msg = `Your ${g.name} login:\nEmail: ${owner.email || ''}\nPassword: ${password}\n\nPlease change it after you sign in.`;
+        modal.replaceChildren(
+          h('h2', null, 'Password set'),
+          h('p', { class: 'muted' }, `${owner.name || 'The owner'} was signed out everywhere. Send them the new password, then close this. It won’t be shown again.`),
+          h('input', { class: 'input mono', readonly: true, value: password, style: 'margin-bottom:12px', onfocus: (ev) => ev.target.select() }),
+          h('div', { class: 'acts' },
+            h('button', { class: 'btn', type: 'button', onclick: () => copy(msg) }, 'Copy message'),
+            h('button', { class: 'btn', type: 'button', onclick: () => whatsapp(owner.phone, msg) }, 'WhatsApp'),
+            h('button', { class: 'btn primary', type: 'button', onclick: () => modal.close() }, 'Done')));
+      });
+    } },
+      h('h2', null, 'Set a new password'),
+      h('p', { class: 'muted' }, `For ${owner.email || 'the owner'}. They’ll be signed out everywhere. A reset link is usually better, because then only they know the password.`),
+      h('label', { class: 'field' }, h('span', null, 'New password'), input),
+      h('button', { class: 'btn small', type: 'button', style: 'margin:-6px 0 14px', onclick: () => { input.value = newPassword(); } }, 'Make another'),
+      err,
+      h('div', { class: 'acts' }, cancel(), go)));
+  }
+
+  function deleteDialog(g, memberCount, recordCount) {
+    const input = h('input', { class: 'input mono', autocomplete: 'off', placeholder: g.code, 'aria-label': `Type ${g.code} to confirm` });
+    const err = h('p', { class: 'err', role: 'alert' });
+    const go = h('button', { class: 'btn danger', type: 'submit', disabled: true }, 'Delete for good');
+    input.addEventListener('input', () => { go.disabled = input.value.trim().toUpperCase() !== g.code; });
+    openModal(h('form', { novalidate: true, onsubmit: (e) => {
+      e.preventDefault();
+      if (go.disabled) return;
+      busy(go, 'Deleting…', async () => {
+        const r = await api('DELETE', `/v1/admin/gyms/${encodeURIComponent(g.id)}`, { confirm: input.value.trim() });
+        if (!r.ok) { err.textContent = r.data.message || 'Couldn’t delete it.'; return; }
+        download(`${g.code}-deleted-backup-${stamp()}.json`, r.data.backup);
+        modal.close(); drawer.close();
+        toast(`${g.name} deleted. Backup downloaded.`);
+        loadGyms();
+      });
+    } },
+      h('h2', null, `Delete ${g.name}?`),
+      h('p', { class: 'muted' }, `This removes the gym, its owner and staff logins, ${plural(memberCount, 'member')} and ${plural(recordCount, 'record')} for good. Anyone signed in is cut off. A backup file downloads first.`),
+      h('label', { class: 'field' }, h('span', null, `Type ${g.code} to confirm`), input),
+      err,
+      h('div', { class: 'acts' }, cancel(), go)));
+    input.focus();
+  }
+
+  $('newGym').addEventListener('click', () => {
+    const f = (label, attrs) => { const i = h('input', { class: 'input', ...attrs }); return [i, h('label', { class: 'field' }, h('span', null, label), i)]; };
+    const [gymName, gymField] = f('Gym name', { maxlength: '60', autocomplete: 'off' });
+    const [ownerName, ownerField] = f('Owner’s name', { maxlength: '60', autocomplete: 'off' });
+    const [email, emailField] = f('Owner’s email (their login)', { type: 'email', maxlength: '120', autocomplete: 'off' });
+    const [phone, phoneField] = f('Owner’s phone (optional)', { type: 'tel', maxlength: '16', autocomplete: 'off' });
+    const [password, pwField] = f('Password for the owner', { class: 'input mono', maxlength: '100', autocomplete: 'off', value: newPassword() });
+    const err = h('p', { class: 'err', role: 'alert' });
+    const go = h('button', { class: 'btn primary', type: 'submit' }, 'Create gym');
+    openModal(h('form', { novalidate: true, onsubmit: (e) => {
+      e.preventDefault();
+      const body = { gymName: gymName.value.trim(), ownerName: ownerName.value.trim(), email: email.value.trim(), phone: phone.value.trim(), password: password.value };
+      if (body.gymName.length < 2 || body.ownerName.length < 2) { err.textContent = 'Enter the gym name and the owner’s name.'; return; }
+      if (!/^\S+@\S+\.\S{2,}$/.test(body.email)) { err.textContent = 'Enter a valid email.'; return; }
+      if (body.password.length < 8) { err.textContent = 'Use a password of 8 or more characters.'; return; }
+      busy(go, 'Creating…', async () => {
+        const r = await api('POST', '/v1/admin/gyms', body);
+        if (!r.ok) { err.textContent = r.data.message || 'Couldn’t create the gym.'; return; }
+        const msg = `${body.gymName} is live.\nGym code: ${r.data.code}\nOwner login: ${body.email}\nPassword: ${body.password}\n\nPlease change the password after you sign in.`;
+        modal.replaceChildren(
+          h('h2', null, `${body.gymName} is live`),
+          h('p', { class: 'muted' }, 'Send the owner their login. The password won’t be shown again.'),
+          h('dl', { class: 'kv', style: 'margin-bottom:16px' }, h('dt', null, 'Gym code'), h('dd', { class: 'mono' }, r.data.code), h('dt', null, 'Login'), h('dd', null, body.email), h('dt', null, 'Password'), h('dd', { class: 'mono' }, body.password)),
+          h('div', { class: 'acts' },
+            h('button', { class: 'btn', type: 'button', onclick: () => copy(msg) }, 'Copy message'),
+            h('button', { class: 'btn', type: 'button', onclick: () => whatsapp(body.phone, msg) }, 'WhatsApp'),
+            h('button', { class: 'btn primary', type: 'button', onclick: () => { modal.close(); openGym(r.data.id); } }, 'Open gym')));
+        loadGyms();
+      });
+    } },
+      h('h2', null, 'New gym'),
+      h('p', { class: 'muted' }, 'For an owner who has said yes. The gym is live at once.'),
+      gymField, ownerField, emailField, phoneField, pwField,
+      err,
+      h('div', { class: 'acts' }, cancel(), go)));
+    gymName.focus();
+  });
+
+  // ---------------------------------------------------------------- start
+  const setup = /^#setup=(.+)$/.exec(location.hash);
+  if (setup) {
+    setupToken = decodeURIComponent(setup[1]);
+    showAuth('setup');
+    api('POST', '/v1/admin/setup/check', { token: setupToken }).then((r) => {
+      if (r.ok) return;
+      $('setupLede').textContent = r.data.message || 'This setup link doesn’t work.';
+      $('setupGo').disabled = true;
+    });
+  } else if (auth && auth.token) {
+    signedIn(auth.token, auth.name);
+  } else {
+    showAuth('login');
+  }
+})();
+</script>
+</body>
+</html>

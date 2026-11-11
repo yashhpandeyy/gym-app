@@ -1,0 +1,56 @@
+# Ships the app's new JavaScript to every installed phone (an over-the-air update), so members and
+# owners get fixes and features without reinstalling. Runs on every push to master that touches the
+# app, and on demand from the Actions tab ("Run workflow"), where you can mark an update as urgent.
+#
+# Needs the repository secret EXPO_TOKEN: expo.dev > Account settings > Access tokens > Create.
+# Until it's added, runs skip with a notice.
+#
+# Changes to native code (a new library with native code, a permission, the icon or splash) can't
+# go out this way. Bump "version" in app.json and make a new build; updates then go to that build.
+name: Update the app
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['server/**', '.github/workflows/deploy-*.yml', '*.md', 'brands/**']
+  workflow_dispatch:
+    inputs:
+      message:
+        description: What changed (members don't see this)
+        required: true
+      urgent:
+        description: Restart phones into it as soon as it downloads
+        type: boolean
+        default: false
+
+concurrency: update-app
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Check the Expo token is set
+        id: gate
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::notice::EXPO_TOKEN isn't set, so no update was published. Add it under Settings > Secrets and variables > Actions."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.gate.outputs.ready == 'true'
+        uses: actions/checkout@v4
+      - if: steps.gate.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.gate.outputs.ready == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.ready == 'true'
+        run: npm run update
+        env:
+          UPDATE_MESSAGE: ${{ inputs.message || github.event.head_commit.message }}
+          URGENT_UPDATE: ${{ inputs.urgent && '1' || '0' }}

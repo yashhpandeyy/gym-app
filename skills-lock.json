@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "skills": {
+    "detour-onboarding": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/detour/detour-onboarding/SKILL.md",
+      "computedHash": "0960be05add0bcaee602a09dc93e0c7226a1b3ada2244310fba5fd2afba74864"
+    },
+    "expo-horizon": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/expo-horizon/SKILL.md",
+      "computedHash": "71653dd73c51221a04a417c5fe4be1744e2a0d45e4eb2d5e98c09a5797fdb98b"
+    },
+    "expo-native-ui": {
+      "source": "expo/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/expo/skills/expo-native-ui/SKILL.md",
+      "computedHash": "3e66ba8d791219f78c8adcb0cdce84f49a61e9869983762598d7e4122a4e43ae"
+    },
+    "fishjam": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/fishjam/SKILL.md",
+      "computedHash": "87657d3dc7adb9b0bba48a714c9c9213fa3e797fd2ac70089776d0b5ae1985d2"
+    },
+    "migrate-to-detour": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/detour/migrate-to-detour/SKILL.md",
+      "computedHash": "da75de72c156e2306444652c3b4ffac2e2cd7f4452ea19b1dd6a68c8b82b7482"
+    },
+    "moq-kit": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/moq-kit/SKILL.md",
+      "computedHash": "f373b5030eb922042690bbbd236af4c03ae7f2113e9b0892a82d3f6805af69d8"
+    },
+    "pulsar-haptics": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pulsar-haptics/SKILL.md",
+      "computedHash": "0b7accd727c8b78771245820f2df5b3b8281caf8208e7a0861183064ade2748d"
+    },
+    "radon-mcp": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/radon-mcp/SKILL.md",
+      "computedHash": "09ba1e44f86148ce027b04d2d580d90abcf71a36fd62d43b9dc90962c99fc90b"
+    },
+    "react-native-best-practices": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-native-best-practices/SKILL.md",
+      "computedHash": "233920f837a20668ec81506ace820f8a5e4b8caa34016d17dbfe4e5af50e995f"
+    },
+    "react-native-design": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/ui-design/skills/react-native-design/SKILL.md",
+      "computedHash": "45544b3512ae23ff2482d33b16339499f45cb5a79440705f66254a69621bffcc"
+    },
+    "react-native-moq": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-native-moq/SKILL.md",
+      "computedHash": "2185e8d8f899009dca5a46588e8f562b1b2f5087bb3376f7a383b73634d27dfe"
+    },
+    "rnrepo": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/rnrepo/SKILL.md",
+      "computedHash": "abc4e0bfb191a75c289184ccd53b6219c5fe10f1835f68d33b38ca385ef45afe"
+    },
+    "security-audit": {
+      "source": "cloudflare/security-audit-skill",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "e6b2e317de75da97e9de18d842982994803f3a67a4a6d8154a82323dc3de8528"
+    },
+    "typegpu": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/typegpu/SKILL.md",
+      "computedHash": "4c2fdd6971b78c6fe34b5f73eafc2af5134d51271a3de635f38835a0d99155e3"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "36aaacc42e9151aa3c66403a9b97d668782635b02bb013fa2122436b7fc3e71b"
+    }
+  }
+}

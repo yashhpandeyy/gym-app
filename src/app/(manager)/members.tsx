@@ -3,25 +3,24 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, View } from 'react-native';
 
 import { Avatar, Chip, Empty, IconButton, Input, Screen, StatusPill, Text } from '@/components/ui';
-import { diffDays, fmtDate, fmtDay, fmtRelativeInline, plural } from '@/lib/date';
+import { diffDays, fmtDay, fmtRelativeInline, plural } from '@/lib/date';
 import { awayAfterDays, awayMembers, awayMessageFor, awayTemplate, membership, type Away, type MembershipInfo } from '@/lib/domain';
-import { firstName, money } from '@/lib/format';
+import { money } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import { whatsapp } from '@/lib/native';
 import { useApp, type Member } from '@/store';
 import { gutter, makeStyles, useTheme } from '@/theme';
 
-type Filter = 'all' | 'active' | 'ending' | 'dues' | 'couples' | 'away' | 'paused' | 'expired';
+type Filter = 'all' | 'active' | 'away' | 'ending' | 'paused' | 'expired' | 'dues';
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'active', label: 'Active' },
-  { key: 'ending', label: 'Ending soon' },
-  { key: 'dues', label: 'Dues' },
-  { key: 'couples', label: 'Couples' },
   { key: 'away', label: 'Not coming' },
+  { key: 'ending', label: 'Ending soon' },
   { key: 'paused', label: 'Paused' },
   { key: 'expired', label: 'Expired' },
+  { key: 'dues', label: 'Dues' },
 ];
 
 function matches(f: Filter, m: Member, info: MembershipInfo, away: Map<string, Away>) {
@@ -34,14 +33,12 @@ function matches(f: Filter, m: Member, info: MembershipInfo, away: Map<string, A
       return info.status === 'active';
     case 'ending':
       return info.expiringSoon;
-    case 'dues':
-      return m.dues > 0;
-    case 'couples':
-      return !!m.partnerName || !!m.isPartner || m.pricingTag === 'Couple';
     case 'paused':
       return info.status === 'paused';
     case 'expired':
       return info.status === 'expired';
+    case 'dues':
+      return m.dues > 0;
   }
 }
 
@@ -122,39 +119,13 @@ export default function Members() {
         ListEmptyComponent={
           <Empty icon="search-outline" title="No members match" body="Try another name or clear the filter." action="Show everyone" onAction={() => { setFilter('all'); setQuery(''); }} />
         }
-        renderItem={({ item: { m, info } }) => (
-          <MemberRow
-            m={m}
-            info={info}
-            today={now.date}
-            filter={filter}
-            gymName={gymName}
-            away={filter === 'away' ? away.get(m.id) : undefined}
-            onNudge={nudge}
-          />
-        )}
+        renderItem={({ item: { m, info } }) => <MemberRow m={m} info={info} today={now.date} away={filter === 'away' ? away.get(m.id) : undefined} onNudge={nudge} />}
       />
     </Screen>
   );
 }
 
-function MemberRow({
-  m,
-  info,
-  today,
-  filter,
-  gymName,
-  away,
-  onNudge,
-}: {
-  m: Member;
-  info: MembershipInfo;
-  today: string;
-  filter: Filter;
-  gymName: string;
-  away?: Away;
-  onNudge: (a: Away) => void;
-}) {
+function MemberRow({ m, info, today, away, onNudge }: { m: Member; info: MembershipInfo; today: string; away?: Away; onNudge: (a: Away) => void }) {
   const { c } = useTheme();
   const s = useStyles();
   let line: string;
@@ -172,79 +143,32 @@ function MemberRow({
       line = `Starts ${fmtDay(info.start)}`;
       break;
     default:
-      line = info.expiringSoon ? `Ends ${fmtRelativeInline(info.end, today)} (${fmtDate(info.end)})` : `${info.plan?.name ?? 'Plan'} until ${fmtDay(info.end)}`;
+      line = info.expiringSoon ? `Ends ${fmtRelativeInline(info.end, today)}` : `${info.plan?.name ?? 'Plan'} until ${fmtDay(info.end)}`;
   }
-
-  // Extra metadata badges (couple, tags, dues date)
-  const meta: string[] = [];
-  if (m.partnerName) meta.push(`Couple with ${m.partnerName}`);
-  if (m.pricingTag && m.pricingTag !== 'Couple') meta.push(m.pricingTag);
-  if (m.dues > 0) {
-    meta.push(m.duePaymentDate ? `${money(m.dues)} due by ${fmtDate(m.duePaymentDate)}` : `${money(m.dues)} due`);
-  }
-
-  const showAction = away || filter === 'ending' || filter === 'dues';
-
-  const onActionPress = () => {
-    if (away) return onNudge(away);
-    if (filter === 'ending') {
-      whatsapp(
-        m.phone,
-        `Hi ${firstName(m.name)}, a friendly reminder from ${gymName || 'your gym'}: your membership ends on ${fmtDate(info.end)}. Reach out to renew your plan and keep your training streak going!`,
-      );
-    } else if (filter === 'dues') {
-      whatsapp(
-        m.phone,
-        `Hi ${firstName(m.name)}, a friendly reminder from ${gymName || 'your gym'}: ${money(m.dues)} is pending on your membership${m.duePaymentDate ? ` (due date: ${fmtDate(m.duePaymentDate)})` : ''}. You can pay by UPI or at the front desk. Thank you!`,
-      );
-    }
-  };
-
-  const actionTooltip =
-    filter === 'ending'
-      ? `Remind ${firstName(m.name)} about membership renewal`
-      : filter === 'dues'
-        ? `Send dues reminder to ${firstName(m.name)}`
-        : `Message ${m.name}`;
-
   const row = (
     <Pressable
       accessibilityRole="button"
       onPress={() => router.push(`/manage/member/${m.id}`)}
-      style={({ pressed }) => [s.row, showAction && { flex: 1, paddingRight: 8 }, pressed && { backgroundColor: c.surfaceAlt }]}>
+      style={({ pressed }) => [s.row, away && { flex: 1, paddingRight: 8 }, pressed && { backgroundColor: c.surfaceAlt }]}>
       <Avatar name={m.name} size={42} />
       <View style={{ flex: 1, gap: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text variant="label" numberOfLines={1}>
-            {m.name}
-          </Text>
-          {m.partnerName ? (
-            <Text variant="caption" style={{ color: c.primary, fontWeight: '600' }}>
-              👫 Couple
-            </Text>
-          ) : null}
-        </View>
-        <Text variant="small" tone={m.dues > 0 && filter === 'dues' ? 'danger' : 'soft'} numberOfLines={1}>
+        <Text variant="label" numberOfLines={1}>
+          {m.name}
+        </Text>
+        <Text variant="small" tone="soft" numberOfLines={1}>
           {line}
-          {meta.length > 0 && !line.includes('due') ? ` • ${meta.join(' • ')}` : ''}
+          {m.dues > 0 ? `, ${money(m.dues)} due` : ''}
         </Text>
       </View>
-      {showAction ? null : <StatusPill status={info.expiringSoon ? 'expiring' : info.status} />}
+      {away ? null : <StatusPill status={info.expiringSoon ? 'expiring' : info.status} />}
     </Pressable>
   );
-
-  if (!showAction) return row;
-
+  if (!away) return row;
+  // The message button sits beside the row, not inside it, so the two taps never nest.
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 16 }}>
       {row}
-      <IconButton
-        icon="logo-whatsapp"
-        label={actionTooltip}
-        variant="soft"
-        size={38}
-        onPress={onActionPress}
-      />
+      <IconButton icon="logo-whatsapp" label={`Message ${m.name}`} variant="soft" size={38} onPress={() => onNudge(away)} />
     </View>
   );
 }

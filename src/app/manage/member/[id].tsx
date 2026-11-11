@@ -36,7 +36,7 @@ import { call, confirm, share, whatsapp } from '@/lib/native';
 import { useApp, type PayMethod } from '@/store';
 import { makeStyles, useTheme } from '@/theme';
 
-type SheetKind = 'renew' | 'payment' | 'pause' | 'dates' | 'away' | 'book' | 'dueDate' | null;
+type SheetKind = 'renew' | 'payment' | 'pause' | 'dates' | 'away' | 'book' | null;
 const METHODS: PayMethod[] = ['UPI', 'Cash', 'Card'];
 
 export default function MemberDetail() {
@@ -80,8 +80,6 @@ export default function MemberDetail() {
   const [joinedOn, setJoinedOn] = useState<ISODate>(m?.joinedOn ?? '');
   const [dateField, setDateField] = useState<'start' | 'end' | 'joined'>('start');
   const [bookDate, setBookDate] = useState<ISODate>(now.date);
-  const [promisedDate, setPromisedDate] = useState<ISODate>(m?.duePaymentDate ?? addDays(now.date, 7));
-  const [partialDueDate, setPartialDueDate] = useState<ISODate | undefined>(m?.duePaymentDate);
 
   if (!m) {
     return (
@@ -123,11 +121,6 @@ export default function MemberDetail() {
     }
     if (k === 'away') setMessage(awayMessageFor(awayTemplate(settings), m, away?.days ?? awayAfterDays(settings), brand.name));
     if (k === 'book') setBookDate(now.date);
-    if (k === 'dueDate') setPromisedDate(m.duePaymentDate ?? addDays(now.date, 7));
-    if (k === 'payment') {
-      setAmount(m.dues ? String(m.dues) : '');
-      setPartialDueDate(m.duePaymentDate);
-    }
     setSheet(k);
   };
 
@@ -156,16 +149,9 @@ export default function MemberDetail() {
   const doPayment = () => {
     const amt = parseInt(amount, 10);
     if (!amt || amt <= 0) return toast.error('Enter the amount you collected.');
-    const remaining = Math.max(0, m.dues - amt);
-    const p = recordPayment(m.id, amt, method, undefined, remaining > 0 ? partialDueDate : undefined);
+    const p = recordPayment(m.id, amt, method);
     setSheet(null);
-    toast.success(`${money(amt)} recorded. Invoice ${p.invoice}.${remaining > 0 ? ` Remaining dues: ${money(remaining)}.` : ''}`);
-  };
-
-  const saveDueDate = () => {
-    updateMember(m.id, { duePaymentDate: promisedDate });
-    setSheet(null);
-    toast.success(`Promised payment date set to ${fmtDate(promisedDate)}.`);
+    toast.success(`${money(amt)} recorded. Invoice ${p.invoice}.`);
   };
 
   const doPause = () => {
@@ -222,127 +208,17 @@ export default function MemberDetail() {
         </Card>
       ) : null}
 
-      {m.partnerName || m.isPartner ? (
-        <Card style={{ gap: 10, marginTop: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Icon name="people-outline" size={20} tone="primary" />
-              <Text variant="h3">Couple Membership</Text>
-            </View>
-            <StatusPill status="active" />
-          </View>
-          <View style={{ gap: 4 }}>
-            <Text variant="body">
-              {m.isPartner ? 'Primary Member:' : 'Partner:'}{' '}
-              <Text variant="label">{m.partnerName || 'Linked partner'}</Text>
-            </Text>
-            {m.partnerPhone ? (
-              <Text variant="small" tone="soft">
-                Phone: {phoneDisplay(m.partnerPhone)}
-              </Text>
-            ) : null}
-            {m.isPartner ? (
-              <Text variant="caption" tone="faint">
-                Account linked to primary couple membership.
-              </Text>
-            ) : null}
-          </View>
-          {m.partnerMemberId ? (
-            <Button
-              title="View partner profile"
-              size="sm"
-              variant="outline"
-              icon="person-outline"
-              onPress={() => router.push(`/manage/member/${m.partnerMemberId}`)}
-            />
-          ) : null}
-        </Card>
-      ) : null}
-
-      {m.pricingTag || m.discountAmount ? (
-        <Card style={{ gap: 10, marginTop: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Icon name="pricetag-outline" size={18} tone="primary" />
-              <Text variant="h3">Special Pricing Details</Text>
-            </View>
-            {m.pricingTag ? (
-              <Chip label={m.pricingTag} selected />
-            ) : null}
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-            {m.originalPrice ? (
-              <View style={{ flex: 1 }}>
-                <Text variant="caption" tone="soft">Original Plan</Text>
-                <Text variant="body" style={{ textDecorationLine: m.discountAmount ? 'line-through' : 'none' }}>
-                  {money(m.originalPrice)}
-                </Text>
-              </View>
-            ) : null}
-            {m.discountAmount ? (
-              <View style={{ flex: 1 }}>
-                <Text variant="caption" tone="soft">Discount Given</Text>
-                <Text variant="body" tone="success" style={{ fontWeight: '700' }}>
-                  -{money(m.discountAmount)}
-                </Text>
-              </View>
-            ) : null}
-            {m.finalPrice ? (
-              <View style={{ flex: 1 }}>
-                <Text variant="caption" tone="soft">Agreed Fee</Text>
-                <Text variant="h3" tone="primary">
-                  {money(m.finalPrice)}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        </Card>
-      ) : null}
-
       {m.dues > 0 ? (
         <Card style={[s.dues, { backgroundColor: c.danger.bg }]}>
-          <View style={{ flex: 1, gap: 4 }}>
+          <View style={{ flex: 1 }}>
             <Text variant="h3" tone="danger">
               {money(m.dues)} due
             </Text>
-            {m.duePaymentDate ? (
-              <Text
-                variant="small"
-                tone={m.duePaymentDate < now.date ? 'danger' : m.duePaymentDate === now.date ? 'warning' : 'soft'}
-                style={{ fontWeight: m.duePaymentDate <= now.date ? '700' : '400' }}>
-                {m.duePaymentDate < now.date
-                  ? `🚨 Overdue by ${diffDays(m.duePaymentDate, now.date)}d (Promised: ${fmtDate(m.duePaymentDate)})`
-                  : m.duePaymentDate === now.date
-                  ? `⚠️ Promised today (${fmtDate(m.duePaymentDate)})`
-                  : `📅 Promised by ${fmtDate(m.duePaymentDate)} (${diffDays(now.date, m.duePaymentDate)}d left)`}
-              </Text>
-            ) : (
-              <Text variant="small" tone="soft">
-                No promised date scheduled.
-              </Text>
-            )}
-            <Pressable onPress={() => open('dueDate')}>
-              <Text variant="caption" tone="primary" style={{ textDecorationLine: 'underline', marginTop: 2 }}>
-                {m.duePaymentDate ? 'Change promised due date' : 'Set promised due date'}
-              </Text>
-            </Pressable>
+            <Text variant="small" tone="soft">
+              Collect it at the desk or send a reminder.
+            </Text>
           </View>
-          <View style={{ gap: 6 }}>
-            <Button
-              title="Remind"
-              size="sm"
-              variant="soft"
-              icon="logo-whatsapp"
-              onPress={() => {
-                const dateNote = m.duePaymentDate ? ` (agreed date: ${fmtDate(m.duePaymentDate)})` : '';
-                whatsapp(
-                  m.phone,
-                  `Hi ${firstName(m.name)}, a friendly reminder from ${brand.name}: your membership balance of ${money(m.dues)}${dateNote} is pending. Please pay at the front desk or via UPI. Thank you!`,
-                );
-              }}
-            />
-            <Button title="Collect" size="sm" onPress={() => open('payment')} />
-          </View>
+          <Button title="Record" size="sm" onPress={() => open('payment')} />
         </Card>
       ) : null}
 
@@ -615,59 +491,6 @@ export default function MemberDetail() {
             <Chip key={x} label={x} selected={method === x} onPress={() => setMethod(x)} />
           ))}
         </View>
-        {m.dues > (parseInt(amount, 10) || 0) && (parseInt(amount, 10) || 0) > 0 ? (
-          <View style={{ marginTop: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: brand.colors.primary, gap: 6, backgroundColor: c.surface }}>
-            <Text variant="label" tone="warning">
-              Remaining: {money(m.dues - (parseInt(amount, 10) || 0))}
-            </Text>
-            <Text variant="caption" tone="soft">
-              Promised date for remaining balance:
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-              {[
-                { label: '+7d', date: addDays(now.date, 7) },
-                { label: '+15d', date: addDays(now.date, 15) },
-                { label: '+30d', date: addDays(now.date, 30) },
-              ].map((opt) => (
-                <Chip
-                  key={opt.label}
-                  label={`${opt.label} (${fmtDay(opt.date)})`}
-                  selected={partialDueDate === opt.date}
-                  onPress={() => setPartialDueDate(opt.date)}
-                />
-              ))}
-            </View>
-          </View>
-        ) : null}
-      </Sheet>
-
-      <Sheet
-        visible={sheet === 'dueDate'}
-        onClose={() => setSheet(null)}
-        title="Promised due date"
-        subtitle={`Schedule when ${firstName(m.name)} promised to pay remaining ${money(m.dues)}.`}
-        footer={<Button title={`Save date (${fmtDate(promisedDate)})`} full onPress={saveDueDate} />}>
-        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-          {[
-            { label: '+7 days', date: addDays(now.date, 7) },
-            { label: '+15 days', date: addDays(now.date, 15) },
-            { label: '+1 month', date: addDays(now.date, 30) },
-          ].map((opt) => (
-            <Chip
-              key={opt.label}
-              label={`${opt.label} (${fmtDay(opt.date)})`}
-              selected={promisedDate === opt.date}
-              onPress={() => setPromisedDate(opt.date)}
-            />
-          ))}
-        </View>
-        <DateCalendar
-          value={promisedDate}
-          onChange={setPromisedDate}
-          min={now.date}
-          max={addMonths(now.date, 12)}
-          jump
-        />
       </Sheet>
 
       <Sheet

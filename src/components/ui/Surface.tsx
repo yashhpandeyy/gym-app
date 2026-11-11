@@ -58,8 +58,8 @@ export function Row({
   icon?: IconName;
   iconTone?: Tone;
   leading?: ReactNode;
-  title: ReactNode;
-  subtitle?: ReactNode;
+  title: string;
+  subtitle?: string;
   value?: string;
   valueTone?: Tone;
   right?: ReactNode;
@@ -79,7 +79,7 @@ export function Row({
       disabled={!onPress}
       onPress={onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={accessibilityLabel ?? (typeof title === 'string' ? title : undefined)}
+      accessibilityLabel={accessibilityLabel ?? title}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         s.row,
         action ? s.rowMain : null,
@@ -92,21 +92,13 @@ export function Row({
           </View>
         ) : null)}
       <View style={s.rowBody}>
-        {typeof title === 'string' ? (
-          <Text variant="label" tone={titleTone} numberOfLines={1}>
-            {title}
-          </Text>
-        ) : (
-          title
-        )}
+        <Text variant="label" tone={titleTone} numberOfLines={1}>
+          {title}
+        </Text>
         {subtitle ? (
-          typeof subtitle === 'string' ? (
-            <Text variant="small" tone="soft" numberOfLines={2}>
-              {subtitle}
-            </Text>
-          ) : (
-            subtitle
-          )
+          <Text variant="small" tone="soft" numberOfLines={2}>
+            {subtitle}
+          </Text>
         ) : null}
       </View>
       {value ? (
