@@ -132,7 +132,7 @@ type Actions = {
   ) => string;
   updateMember: (id: string, patch: Partial<Member>) => void;
   removeMember: (id: string) => void;
-  recordPayment: (memberId: string, amount: number, method: PayMethod, note?: string) => Payment;
+  recordPayment: (memberId: string, amount: number, method: PayMethod, note?: string, dueDate?: ISODate) => Payment;
   setSlotCapacity: (slotId: string, capacity: number) => void;
   addSlot: (input: { start: string; end: string; capacity: number; days: number[] }) => Result;
   updateSlot: (id: string, input: { start: string; end: string; capacity: number; days: number[] }) => Result;
@@ -782,7 +782,7 @@ export const useApp = create<AppState>()(
             pauses: s.pauses.filter((p) => p.memberId !== id),
           });
         },
-        recordPayment: (memberId, amount, method, note) => {
+        recordPayment: (memberId, amount, method, note, dueDate) => {
           const s = get();
           const payment: Payment = {
             id: uid('pay'),
@@ -792,6 +792,7 @@ export const useApp = create<AppState>()(
             amount,
             method,
             note: note || 'Dues cleared',
+            dueDate,
           };
           set({
             payments: [...s.payments, payment],
