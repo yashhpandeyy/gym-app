@@ -25,6 +25,7 @@ import { membership, parseGuestQRValue, parseQRValue } from '@/lib/domain';
 import { firstName } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import { haptic } from '@/lib/native';
+import { passIsGenuine } from '@/lib/pass';
 import { useApp, type Member } from '@/store';
 import { makeStyles, useTheme } from '@/theme';
 
@@ -131,6 +132,11 @@ export default function Scan() {
     if (!m) {
       haptic.warn();
       setOutcome({ ok: false, title: 'Member not found', body: `No member with ID ${parsed.code}. Check the members list.` });
+      return;
+    }
+    if (!passIsGenuine(m.passKey, parsed)) {
+      haptic.warn();
+      setOutcome({ ok: false, title: 'Pass not accepted', body: 'This pass couldn’t be verified. Ask the member to reopen their app, or use Find by name.' });
       return;
     }
     run(m, 'qr');

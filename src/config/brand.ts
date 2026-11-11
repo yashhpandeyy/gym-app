@@ -1,12 +1,26 @@
 import brandJson from './brand.json';
 
-export type FeatureKey = 'classes' | 'trainers' | 'progress' | 'workouts' | 'referrals' | 'leads' | 'gamification' | 'guestPass' | 'nutrition' | 'mind';
+export type FeatureKey =
+  | 'classes'
+  | 'trainers'
+  | 'progress'
+  | 'workouts'
+  | 'referrals'
+  | 'leads'
+  | 'gamification'
+  | 'chests'
+  | 'guestPass'
+  | 'nutrition'
+  | 'mind'
+  | 'pauses'
+  | 'store'
+  | 'fitnessTest';
 
 export type Hours = { label: string; days: number[]; open: string; close: string };
 
 /**
  * What the app knows about the gym it is showing. `brand.json` holds the platform defaults (the
- * neutral "GYM" look before anyone has joined a gym, or a dedicated app's fixed identity). Once
+ * neutral MyGym look before anyone has joined a gym, or a dedicated app's fixed identity). Once
  * a person is signed in to a gym, the gym's own details from the server replace those defaults.
  */
 export type Brand = {

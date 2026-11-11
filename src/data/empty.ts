@@ -54,5 +54,12 @@ export function emptyData(): Data {
     supplements: {},
     supplementLog: {},
     mindLog: [],
+    testResults: [],
+    products: [],
+    orders: [],
+    sales: [],
+    team: [],
+    attendance: {},
+    ledger: [],
   };
 }

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
 import {
+  adminLoginOf,
   adminOnly,
   adminToken,
   cleanProfile,
@@ -33,11 +34,13 @@ import {
   type GymRow,
 } from './core';
 import { hashSecret, hmacCode, newId, randomDigits, randomToken, safeEqual, sha256, verifySecret } from './crypto';
+import { registerAdmin } from './admin';
 import { registerSync } from './sync';
 
 const app = new Hono<AppEnv>();
 app.use('*', cors({ origin: '*', allowHeaders: ['authorization', 'content-type'], exposeHeaders: ['x-session-token'], maxAge: 600 }));
 registerSync(app);
+registerAdmin(app);
 
 // ---------------------------------------------------------------------------
 // Public routes
@@ -102,20 +105,21 @@ app.post('/v1/auth/login', async (c) => {
 
 /**
  * Owners sign in with their email. The gym comes from the account, so no gym code is needed.
- * Platform admins (you) use the same screen: if the email belongs to an admin account, that's who signs in.
+ * Platform admins (you) use the same screen: if the email or username belongs to an admin account, that's who signs in.
  */
 app.post('/v1/auth/owner-login', async (c) => {
   const b = await body(c);
   const email = emailOf(b.email);
+  const login = adminLoginOf(b.email);
   const secret = typeof b.password === 'string' ? b.password : '';
-  const keys = [`owner:${email}`, `owner-ip:${ip(c)}`];
+  const keys = [`owner:${login}`, `owner-ip:${ip(c)}`];
   if ((await blocked(c.env.DB, keys[0], 5, 900)) || (await blocked(c.env.DB, keys[1], 30, 900))) {
     return fail(c, 429, 'too_many', 'Too many tries. Wait 15 minutes.');
   }
   const user = email
     ? await c.env.DB.prepare("SELECT id, gym_id, name, secret FROM users WHERE role = 'owner' AND lower(email) = ?").bind(email).first<{ id: string; gym_id: string; name: string; secret: string }>()
     : null;
-  const admin = !user && email ? await c.env.DB.prepare('SELECT id, name, secret FROM admins WHERE email = ?').bind(email).first<{ id: string; name: string; secret: string }>() : null;
+  const admin = !user && login ? await c.env.DB.prepare('SELECT id, name, secret FROM admins WHERE email = ?').bind(login).first<{ id: string; name: string; secret: string }>() : null;
   const ok = await verifySecret(secret, (user ?? admin)?.secret ?? (await dummyHash(c.env.APP_SECRET)), c.env.APP_SECRET);
   if (admin && ok) {
     await clearFails(c.env.DB, keys[0]);
@@ -359,13 +363,17 @@ async function inviteReply(c: Ctx, gymId: string, member: { id: string; name: st
     expiresInDays: CODE_DAYS,
     whatsapp: {
       phone: member.phone,
-      text: `Hi ${member.name}, welcome to ${g?.name}! Open the GYM app and sign in with your phone number and this code: ${code}. Keep it: it's your login.`,
+      text: `Hi ${member.name}, welcome to ${g?.name}! Open the MyGym app and sign in with your phone number and this code: ${code}. Keep it: it's your login.`,
     },
   };
 }
 
-/** Fields the gym may set on a new member's record. The server adds the id and the member number. */
-const NEW_MEMBER_FIELDS = ['gender', 'joinedOn', 'planId', 'startDate', 'endDate', 'pauseAllowance', 'dues', 'preferredSlotId', 'trainerId', 'goalWeight', 'notes', 'weeklyGoal', 'referredBy'];
+const NEW_MEMBER_FIELDS = [
+  'gender', 'joinedOn', 'planId', 'startDate', 'endDate', 'pauseAllowance', 'dues',
+  'preferredSlotId', 'trainerId', 'goalWeight', 'notes', 'weeklyGoal', 'referredBy',
+  'partnerMemberId', 'partnerName', 'partnerPhone', 'isPartner', 'pricingTag',
+  'originalPrice', 'discountAmount', 'finalPrice', 'duePaymentDate',
+];
 
 /**
  * The gym adds a member. That creates their identity (so they can sign in), their full record,
@@ -388,7 +396,7 @@ app.post('/v1/members', staffOnly, async (c) => {
   if (!counter || !gym) return fail(c, 404, 'not_found', 'Gym not found.');
   const id = newId('m');
   const code = `${gym.code.slice(0, 2)}-${counter.member_no}`;
-  const doc: Record<string, unknown> = { weeklyGoal: 4, joinedOn: new Date().toISOString().slice(0, 10), pauseAllowance: 0, dues: 0, ...fields, id, code, name, phone };
+  const doc: Record<string, unknown> = { weeklyGoal: 4, joinedOn: new Date().toISOString().slice(0, 10), pauseAllowance: 0, dues: 0, ...fields, id, code, name, phone, passKey: randomToken(32) };
   const invite = await prepareInvite(c, s.gymId, id);
   await c.env.DB.batch([
     c.env.DB.prepare('INSERT INTO members (id, gym_id, name, phone, email, gender, code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(id, s.gymId, name, phone, email, typeof doc.gender === 'string' ? doc.gender : null, code, nowIso()),
@@ -403,7 +411,13 @@ app.post('/v1/members/:id/invite', staffOnly, async (c) => {
   const s = c.get('s');
   const m = await c.env.DB.prepare('SELECT id, name, phone FROM members WHERE id = ? AND gym_id = ?').bind(c.req.param('id'), s.gymId).first<{ id: string; name: string; phone: string }>();
   if (!m) return fail(c, 404, 'not_found', 'Member not found.');
-  return c.json(await inviteReply(c, s.gymId, m, await makeInvite(c, s.gymId, m.id)));
+  const invite = await makeInvite(c, s.gymId, m.id);
+  // Whoever held the old code may hold the old phone too, so its pass stops working as well.
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE gym_seq SET seq = seq + 1 WHERE gym_id = ?').bind(s.gymId),
+    c.env.DB.prepare("UPDATE docs SET data = json_set(data, '$.passKey', ?), seq = (SELECT seq FROM gym_seq WHERE gym_id = ?) WHERE gym_id = ? AND kind = 'members' AND id = ?").bind(randomToken(32), s.gymId, s.gymId, m.id),
+  ]);
+  return c.json(await inviteReply(c, s.gymId, m, invite));
 });
 
 /** Staff scan the member's pairing QR and say who they are. Only then does the member's app unlock. */
@@ -447,10 +461,10 @@ app.get('/v1/bootstrap', auth(), async (c) => {
 app.post('/v1/admin/accounts', adminOnly, async (c) => {
   if (!c.get('admin').master) return fail(c, 403, 'forbidden', 'Only the master token can add admins.');
   const b = await body(c);
-  const email = emailOf(b.email);
+  const email = adminLoginOf(b.email);
   const name = text(b.name, 2, 60);
   const password = typeof b.password === 'string' && b.password.length >= 8 && b.password.length <= 100 ? b.password : null;
-  if (!email || !name || !password) return fail(c, 400, 'invalid', 'Needs a valid email, a name and a password of 8 or more characters.');
+  if (!email || !name || !password) return fail(c, 400, 'invalid', 'Needs a valid email or username, a name and a password of 8 or more characters.');
   const clash = await c.env.DB.prepare('SELECT 1 AS x FROM admins WHERE email = ?').bind(email).first();
   if (clash) return fail(c, 409, 'exists', 'That admin already exists.');
   await c.env.DB.prepare('INSERT INTO admins (id, email, name, secret, created_at) VALUES (?, ?, ?, ?, ?)').bind(newId('adm'), email, name, await hashSecret(password, c.env.APP_SECRET), nowIso()).run();
@@ -459,8 +473,11 @@ app.post('/v1/admin/accounts', adminOnly, async (c) => {
 
 app.get('/v1/admin/gyms', adminOnly, async (c) => {
   const rows = await c.env.DB.prepare(
-    `SELECT g.id, g.code, g.name, g.status, g.created_at,
+    `SELECT g.id, g.code, g.name, g.status, g.created_at, g.primary_color,
             (SELECT COUNT(*) FROM members m WHERE m.gym_id = g.id) AS members,
+            (SELECT COUNT(*) FROM users u WHERE u.gym_id = g.id AND u.role = 'staff') AS staff,
+            (SELECT COUNT(*) FROM docs d WHERE d.gym_id = g.id AND d.kind = 'plans' AND d.deleted = 0) AS plans,
+            (SELECT MAX(s.created_at) FROM sessions s WHERE s.gym_id = g.id) AS last_sign_in,
             (SELECT u.email FROM users u WHERE u.gym_id = g.id AND u.role = 'owner' LIMIT 1) AS owner_email,
             (SELECT u.name FROM users u WHERE u.gym_id = g.id AND u.role = 'owner' LIMIT 1) AS owner_name,
             (SELECT u.phone FROM users u WHERE u.gym_id = g.id AND u.role = 'owner' LIMIT 1) AS owner_phone

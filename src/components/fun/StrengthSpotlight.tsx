@@ -94,7 +94,7 @@ export function StrengthSpotlight({ highlights }: { highlights: Highlight[] }) {
 }
 
 const useStyles = makeStyles((t) => ({
-  scroll: { marginHorizontal: -gutter, flexGrow: 0 },
+  scroll: { marginHorizontal: -gutter, flexGrow: 0, flexShrink: 0 },
   row: { paddingHorizontal: gutter, gap: 12, paddingVertical: 4 },
   card: { width: CARD_W, height: 196, borderRadius: t.radius.xl, padding: 16, overflow: 'hidden', gap: 4 },
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },

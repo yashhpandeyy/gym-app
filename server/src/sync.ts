@@ -1,8 +1,9 @@
 import type { Hono } from 'hono';
 
-import { drawPrize } from '../../shared/rules';
-import { addDays, auth, body, fail, nowIso, todayIST, type AppEnv, type Role } from './core';
+import { drawPrize, rewardsOn } from '../../shared/rules';
+import { addDays, auth, body, fail, json, nowIso, todayIST, type AppEnv, type Role } from './core';
 import { newId } from './crypto';
+import { BARE_VALUES, validDoc } from './validate';
 
 /**
  * How every device keeps the same gym in step. Each record the app stores is a small JSON document
@@ -23,7 +24,10 @@ type Spec = {
   /** For other members' documents: only this many days back are sent. */
   windowDays?: number;
   /** Who may change it. */
-  write: 'staff' | 'own';
+  write: 'staff' | 'own' | 'owner';
+  /** What front-desk staff see. Everything, unless it's the owner's business (pay, the books). */
+  desk?: 'none' | 'project';
+  deskProject?: (d: Doc) => Doc;
   /** Timestamp or date used for the window. */
   at?: (d: Record<string, unknown>) => string | null;
   project?: (d: Doc) => Doc;
@@ -46,6 +50,25 @@ const SPECS: Record<string, Spec> = {
   announcements: config(),
   challenges: config(),
   leads: { scope: 'gym', others: 'none', write: 'staff' },
+
+  // The shop. Everyone sees what's on sale, members reserve, the desk sells.
+  products: config(),
+  orders: mine('memberId'),
+  sales: { scope: 'gym', others: 'none', write: 'staff', at: (d) => dateOf(d.date) },
+
+  // Running the gym. The desk marks who came in; pay and the books are the owner's alone.
+  team: {
+    scope: 'gym',
+    others: 'none',
+    write: 'owner',
+    desk: 'project',
+    deskProject: (d) => {
+      const t = d as Record<string, unknown>;
+      return { id: t.id, name: t.name, role: t.role, offDays: t.offDays, joinedOn: t.joinedOn, active: t.active };
+    },
+  },
+  attendance: { scope: 'gym', others: 'none', write: 'staff' },
+  ledger: { scope: 'gym', others: 'none', write: 'owner', desk: 'none', at: (d) => dateOf(d.date) },
 
   // People and what they did. Other members see only what a leaderboard or a "spots left" count needs.
   members: mine('id', {
@@ -88,6 +111,8 @@ const SPECS: Record<string, Spec> = {
   chests: mine('memberId', { at: (d) => dateOf(d.earnedAt) }),
   guestPasses: mine('hostId'),
   mindLog: mine('memberId', { at: (d) => dateOf(d.at) }),
+  // Strength and endurance test results. The member and the gym team see them, nobody else.
+  testResults: mine('memberId', { at: (d) => dateOf(d.date) }),
   workouts: mine('id', { write: 'staff' }),
   dietPlans: mine('id', { write: 'staff' }),
   workoutLog: mine('id'),
@@ -98,6 +123,17 @@ const SPECS: Record<string, Spec> = {
   ringClaims: mine('id'),
   supplements: mine('id'),
 };
+
+/** The features a gym has switched on or off. A feature missing from the list counts as on. */
+async function gymFeatures(db: D1Database, gymId: string) {
+  const g = await db.prepare('SELECT features FROM gyms WHERE id = ?').bind(gymId).first<{ features: string }>();
+  return json(g?.features ?? '{}') as Record<string, unknown>;
+}
+
+/** Which rewards a gym has switched on. */
+async function gymRewards(db: D1Database, gymId: string) {
+  return rewardsOn(await gymFeatures(db, gymId));
+}
 
 const MAX_DOC_CHARS = 200_000;
 const MAX_OPS = 20;
@@ -121,6 +157,9 @@ function view(row: Row, role: Role, me: string | null, today: string): Out | nul
   const base = { kind: row.kind, id: row.id, seq: row.seq };
   if (row.deleted) return { ...base, deleted: true };
   const data = JSON.parse(row.data) as Doc;
+  if (!validDoc(row.kind, row.id, data)) return null;
+  if (role === 'staff' && spec.desk === 'none') return null;
+  if (role === 'staff' && spec.desk === 'project' && spec.deskProject) return { ...base, deleted: false, data: spec.deskProject(data) };
   if (role !== 'member') return { ...base, deleted: false, data };
   if (row.member_id !== null && row.member_id === me) return { ...base, deleted: false, data };
   if (spec.scope === 'gym') return spec.others === 'all' ? { ...base, deleted: false, data } : null;
@@ -140,7 +179,30 @@ type Existing = Map<string, { member_id: string | null; data: Doc; deleted: bool
 type Verdict = { ok: true; data?: Doc } | { ok: false; error: string };
 const no = (error: string): Verdict => ({ ok: false, error });
 
-type Ctx = { role: Role; me: string | null; settings: Record<string, unknown>; xpToday: number; chestsToday: number };
+type Ctx = { role: Role; me: string | null; settings: Record<string, unknown>; features: Record<string, unknown>; xpToday: number; chestsToday: number; today: string };
+
+/** A member's reservation, with names and prices taken from the shop rather than from the phone. */
+function priceOrder(items: unknown, ex: Existing) {
+  if (!Array.isArray(items) || items.length < 1 || items.length > 10) return null;
+  const out: { productId: string; name: string; price: number; qty: number }[] = [];
+  for (const raw of items) {
+    const it = raw as Record<string, unknown> | null;
+    const productId = it ? str(it.productId) : null;
+    const qty = it ? Number(it.qty) : NaN;
+    if (!productId || !Number.isInteger(qty) || qty < 1 || qty > 20) return null;
+    const p = ex.get(`products/${productId}`);
+    const prod = p && !p.deleted && !Array.isArray(p.data) ? p.data : null;
+    if (!prod || prod.active === false || typeof prod.price !== 'number') return null;
+    out.push({ productId, name: String(prod.name ?? ''), price: prod.price, qty });
+  }
+  return { items: out, total: out.reduce((sum, i) => sum + i.price * i.qty, 0) };
+}
+
+/** How far a phone's own date may stray: a week offline behind, a day of clock drift ahead. */
+const plausibleDay = (v: unknown, today: string) => {
+  const day = dateOf(v);
+  return !!day && day >= addDays(today, -7) && day <= addDays(today, 1);
+};
 
 /** Extra rules for what members, as opposed to staff, may write. Staff are trusted with everything else. */
 function memberMayWrite(kind: string, id: string, d: Doc, ex: Existing, c: Ctx): Verdict {
@@ -151,7 +213,7 @@ function memberMayWrite(kind: string, id: string, d: Doc, ex: Existing, c: Ctx):
   const rec = (Array.isArray(d) ? {} : d) as Record<string, unknown>;
   const was = (had ? old!.data : {}) as Record<string, unknown>;
 
-  if (spec.write === 'staff') return no('forbidden');
+  if (spec.write !== 'own') return no('forbidden');
   const owner = ownerOf(spec, id, d);
 
   switch (kind) {
@@ -171,6 +233,7 @@ function memberMayWrite(kind: string, id: string, d: Doc, ex: Existing, c: Ctx):
     case 'pauses': {
       if (owner !== me) return no('forbidden');
       if (!had) {
+        if (c.features.pauses === false) return no('feature_off');
         if (rec.status === 'pending') return { ok: true };
         if (rec.status === 'approved' && c.settings.autoApprovePause === true) return { ok: true };
         return no('needs_approval');
@@ -189,13 +252,28 @@ function memberMayWrite(kind: string, id: string, d: Doc, ex: Existing, c: Ctx):
       return no('forbidden');
     }
     case 'guestPasses':
-      return owner === me && !had ? { ok: true } : no('forbidden');
+      if (owner !== me || had) return no('forbidden');
+      return c.features.guestPass === false ? no('feature_off') : { ok: true };
+    case 'orders': {
+      if (owner !== me) return no('forbidden');
+      if (!had) {
+        if (c.features.store === false) return no('feature_off');
+        if (rec.status !== 'requested') return no('forbidden');
+        const priced = priceOrder(rec.items, ex);
+        if (!priced) return no('invalid');
+        return { ok: true, data: { id, memberId: me, ...priced, status: 'requested', createdAt: typeof rec.createdAt === 'string' ? rec.createdAt : nowIso() } };
+      }
+      // A member can only call off a reservation the desk hasn't acted on.
+      if (was.memberId === me && was.status === 'requested' && rec.status === 'cancelled') return { ok: true, data: { ...was, status: 'cancelled' } };
+      return no('forbidden');
+    }
     case 'leads':
       return !had && rec.hostId === me ? { ok: true } : no('forbidden');
     case 'xp': {
       if (owner !== me || had) return no('forbidden');
       const amount = Number(rec.amount);
       if (!Number.isInteger(amount) || amount < 1 || amount > 150) return no('invalid');
+      if (!plausibleDay(rec.at, c.today)) return no('invalid');
       if (c.xpToday + amount > 600) return no('daily_limit');
       return { ok: true };
     }
@@ -203,16 +281,19 @@ function memberMayWrite(kind: string, id: string, d: Doc, ex: Existing, c: Ctx):
       if (owner !== me) return no('forbidden');
       if (!had) {
         if (rec.openedAt || rec.prize || rec.redeemedAt) return no('forbidden');
+        if (!plausibleDay(rec.earnedAt, c.today)) return no('invalid');
         if (c.chestsToday >= 4) return no('daily_limit');
-        return { ok: true };
+        // Nobody at the gym saw this one earned, so it can only ever pay XP.
+        return { ok: true, data: { ...rec, selfEarned: true } };
       }
       // Opening and redeeming are the server's and the desk's business, never the app's.
-      if (was.openedAt !== rec.openedAt || JSON.stringify(was.prize) !== JSON.stringify(rec.prize) || was.redeemedAt !== rec.redeemedAt) return no('forbidden');
-      return { ok: true };
+      if (was.memberId !== me || was.openedAt !== rec.openedAt || JSON.stringify(was.prize) !== JSON.stringify(rec.prize) || was.redeemedAt !== rec.redeemedAt) return no('forbidden');
+      return { ok: true, data: was };
     }
     case 'lifts':
     case 'challengeEntries':
     case 'mindLog':
+    case 'testResults':
       if (owner !== me) return no('forbidden');
       return had && was.memberId !== me ? no('forbidden') : { ok: true };
     default:
@@ -288,7 +369,8 @@ export function registerSync(app: Hono<AppEnv>) {
       const r = o as Record<string, unknown>;
       const kind = str(r.kind);
       const id = str(r.id);
-      const data = r.data === null ? null : r.data && typeof r.data === 'object' ? (r.data as Doc) : undefined;
+      const bare = kind !== null && BARE_VALUES.has(kind) && (typeof r.data === 'number' || typeof r.data === 'string');
+      const data = r.data === null ? null : bare || (r.data && typeof r.data === 'object') ? (r.data as Doc) : undefined;
       if (!kind || !id || id.length > 100 || data === undefined || !SPECS[kind]) {
         results.push({ kind: kind ?? '?', id: id ?? '?', ok: false, error: 'invalid' });
         return null;
@@ -309,6 +391,9 @@ export function registerSync(app: Hono<AppEnv>) {
         need.add(`${o.data.kind === 'class' ? 'classes' : 'slots'}/${o.data.refId}`);
       }
       if (o.kind === 'pauses') need.add('settings/gym');
+      if (o.kind === 'orders' && o.data && !Array.isArray(o.data) && Array.isArray(o.data.items)) {
+        for (const it of o.data.items.slice(0, 10) as Record<string, unknown>[]) if (it && typeof it.productId === 'string') need.add(`products/${it.productId}`);
+      }
     }
     const pairs = [...need].map((k) => [k.slice(0, k.indexOf('/')), k.slice(k.indexOf('/') + 1)] as const);
     const found = await c.env.DB.prepare(`SELECT kind, id, member_id, data, deleted FROM docs WHERE gym_id = ? AND (${pairs.map(() => '(kind = ? AND id = ?)').join(' OR ')})`)
@@ -334,8 +419,11 @@ export function registerSync(app: Hono<AppEnv>) {
         chestsToday = r?.n ?? 0;
       }
     }
+    const FEATURE_KINDS = new Set(['xp', 'chests', 'pauses', 'guestPasses', 'orders']);
+    const features = valid.some((o) => o.data && FEATURE_KINDS.has(o.kind)) ? await gymFeatures(c.env.DB, s.gymId) : {};
+    const rewards = rewardsOn(features);
     const settingsDoc = existing.get('settings/gym');
-    const ctx: Ctx = { role: s.role, me: s.memberId, settings: (settingsDoc && !Array.isArray(settingsDoc.data) ? settingsDoc.data : {}) as Record<string, unknown>, xpToday, chestsToday };
+    const ctx: Ctx = { role: s.role, me: s.memberId, settings: (settingsDoc && !Array.isArray(settingsDoc.data) ? settingsDoc.data : {}) as Record<string, unknown>, features, xpToday, chestsToday, today };
 
     type Plan = { op: Op; data: Doc | null; owner: string | null; conditional: boolean; capacity: number };
     const plan: Plan[] = [];
@@ -349,7 +437,8 @@ export function registerSync(app: Hono<AppEnv>) {
       let data = op.data;
       let error: string | null = null;
 
-      if (data === null) {
+      if (spec.write === 'owner' && s.role !== 'owner') error = 'forbidden';
+      else if (data === null) {
         if (isMember) error = 'forbidden';
         else if (!had) {
           // Nothing to delete. Report success so the device stops retrying.
@@ -358,13 +447,18 @@ export function registerSync(app: Hono<AppEnv>) {
         }
       } else {
         if (op.kind === 'members' && s.role !== 'member' && !had) error = 'use_invite';
-        else if (isMember) {
+        else if (op.kind === 'members' && !isMember && !Array.isArray(data)) {
+          // The pass key is the server's alone. A staff phone's copy may be out of date.
+          data = { ...data, passKey: (old!.data as Record<string, unknown>).passKey };
+        } else if (isMember) {
           const v = memberMayWrite(op.kind, op.id, data, existing, ctx);
           if (!v.ok) error = v.error;
           else if (v.data) data = v.data;
+          if (!error && !validDoc(op.kind, op.id, data)) error = 'invalid';
           if (op.kind === 'xp' && !error) ctx.xpToday += Number((data as Record<string, unknown>).amount) || 0;
           if (op.kind === 'chests' && !had && !error) ctx.chestsToday += 1;
         }
+        if (!error && !had && ((op.kind === 'xp' && !rewards.xp) || (op.kind === 'chests' && !rewards.chests))) error = 'feature_off';
         if (!error && ownerOf(spec, op.id, data) === null && spec.scope === 'member' && op.kind !== 'notices') error = 'invalid';
         if (!error && op.kind === 'members' && !Array.isArray(data)) {
           if ((data as Record<string, unknown>).id !== op.id) error = 'invalid';
@@ -436,7 +530,8 @@ export function registerSync(app: Hono<AppEnv>) {
         k1 = `${rec.kind}:${rec.refId}:${rec.date}`;
         k2 = String(rec.status ?? '');
       } else if (op.kind === 'xp' || op.kind === 'chests') {
-        k1 = `${owner}:${(when ?? today).slice(0, 10)}`;
+        // Members count against the server's date, so a date chosen on the phone can't dodge a daily limit.
+        k1 = `${owner}:${isMember ? today : (when ?? today).slice(0, 10)}`;
       }
       const json = JSON.stringify(data);
       const upsert = `ON CONFLICT(gym_id, kind, id) DO UPDATE SET member_id = excluded.member_id, data = excluded.data, seq = excluded.seq, deleted = 0, k1 = excluded.k1, k2 = excluded.k2, at = excluded.at`;
@@ -469,7 +564,7 @@ export function registerSync(app: Hono<AppEnv>) {
     plan.forEach((p, i) => {
       if (refused.has(i)) results.push({ kind: p.op.kind, id: p.op.id, ok: false, error: 'slot_full' });
       else {
-        const changed = p.op.kind === 'members' && s.role === 'member';
+        const changed = (p.op.kind === 'members' || p.op.kind === 'chests' || p.op.kind === 'orders') && s.role === 'member';
         results.push({ kind: p.op.kind, id: p.op.id, ok: true, ...(changed && p.data ? { data: p.data } : {}) });
       }
     });
@@ -484,6 +579,7 @@ export function registerSync(app: Hono<AppEnv>) {
   app.post('/v1/chests/:id/open', auth({ roles: ['member'] }), async (c) => {
     const s = c.get('s');
     const id = c.req.param('id');
+    if (!(await gymRewards(c.env.DB, s.gymId)).chests) return fail(c, 403, 'feature_off', 'Chests are turned off at this gym.');
     const rows = await c.env.DB.prepare("SELECT kind, id, data FROM docs WHERE gym_id = ? AND deleted = 0 AND ((kind = 'chests' AND id = ?) OR (kind = 'members' AND id = ?))")
       .bind(s.gymId, id, s.memberId)
       .all<{ kind: string; id: string; data: string }>();
@@ -492,7 +588,7 @@ export function registerSync(app: Hono<AppEnv>) {
     const chest = chestRow ? (JSON.parse(chestRow.data) as Record<string, unknown>) : null;
     if (!chest || chest.memberId !== s.memberId || chest.openedAt || !memberRow) return fail(c, 404, 'not_found', 'That chest isn’t available.');
 
-    const prize = drawPrize(() => crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000);
+    const prize = drawPrize(() => crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000, chest.selfEarned === true);
     const openedAt = nowIso();
     const member = JSON.parse(memberRow.data) as Record<string, unknown>;
     const DB = c.env.DB;

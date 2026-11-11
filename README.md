@@ -1,4 +1,4 @@
-# GYM: one app for every gym you sign
+# MyGym: one app for every gym you sign
 
 A gym membership app that re-skins itself for each gym. The owner signs up (or you create the gym for them on the spot), sets their logo, colours, hours and features, and gets a short **gym code** like `FK20`. Their members enter that code, and the app becomes theirs. Everything is real: members, bookings, check-ins, XP, plans and payments live on a server and stay in step on every phone.
 
@@ -62,17 +62,40 @@ shared/rules.ts         game rules both the app and the server use
 
 ## What stays on the phone
 
-Medicines and supplement ticks are never uploaded. Staff can't see them. Everything else a gym member does is stored on the server.
+Medicines, supplement ticks and alarms are never uploaded. Staff can't see them. Everything else a gym member does is stored on the server.
 
 ## Publishing
 
-Builds use [EAS](https://docs.expo.dev/eas/); no Mac or Android Studio is needed. One app called **GYM** serves every gym; members pick theirs with the code.
+Builds use [EAS](https://docs.expo.dev/eas/); no Mac or Android Studio is needed. One app called **MyGym** serves every gym; members pick theirs with the code.
 
 ```bash
 npx eas-cli@latest init
 npx eas-cli@latest build --platform all --profile production
 npx eas-cli@latest submit --platform all
 ```
+
+### Updating installed apps without a reinstall
+
+Most changes (bug fixes, new screens, layout, wording, images, new features built from the libraries already in the app) reach phones over the air with [Expo Update](https://docs.expo.dev/eas-update/introduction/):
+
+```bash
+npm run update -- "Fix the booking screen"          # every store build
+npm run update -- "Try the new home" --preview      # test APKs only
+npm run update -- "Fix check-in crash" --urgent     # phones restart into it as soon as it arrives
+```
+
+Phones download the update in the background and run it the next time the app opens. A banner offers to restart sooner, and tapping the version line at the foot of Profile or More checks straight away. Pushing to `master` publishes an update automatically once the repository secret `EXPO_TOKEN` is set (`.github/workflows/update-app.yml`). If an update crashes on start, the phone goes back to the version it had.
+
+A few changes need a new build, because they live in the installed app rather than its JavaScript: a library with native code, a new permission, the app icon, the splash screen, the app name. For those, bump `version` in `app.json`, build, and publish to the stores. Updates only go to builds with the same `version`, so older installs never receive code they can't run.
+
+One exception, on purpose: members' alarms use native code that older builds don't have, and the app checks for it before loading it, so every install on the same `version` still takes every update. Keep those checks if you touch alarms.
+
+- `modules/gym-alarm` is the app's own Android module (Kotlin). It rings alarms like the phone's clock: full screen over the lock screen, looping on the alarm volume, with Stop and Snooze on the alarm itself, app open or closed. Builds from late November 2026 have it.
+- Builds that only have `expo-notifications` ring a notification with the alarm sound when the app is closed.
+- Builds with neither ring alarms only while the app is open, and the Alarms screen asks the member to install the latest app.
+- `src/lib/keepAwake.ts` does the same for keeping the screen on during the strength test.
+
+The free Expo plan covers updates for 1,000 phones a month (each phone counts once, however many updates it gets) and can't run up charges. Expo's docs don't say what happens to the 1,001st phone, so watch the usage page on expo.dev as gyms sign up. If it gets close, updates can move to a free server of our own on Cloudflare, because the update format is an open standard.
 
 Check the current store rules before you promise launch dates:
 
@@ -89,6 +112,6 @@ A gym that wants its own app on the stores gets a dedicated build: copy a file f
 | `npx expo start` | Run the app (Expo Go, simulator or web) |
 | `npm run typecheck` | TypeScript check |
 | `npm run lint` | ESLint |
-| `cd server && npm test` | 120+ end-to-end checks of the server against a running `npm run dev` |
+| `cd server && npm test` | 200+ end-to-end checks of the server against a running `npm run dev`, plus forgery checks on the check-in pass |
 | `npm run brand -- <name>` | Switch a dedicated build to one of the files in `brands/` |
 | `npm run icons` | Regenerate icons and splash from the active brand (needs Python with Pillow) |

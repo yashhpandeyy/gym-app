@@ -20,12 +20,15 @@ import {
   termEnd,
   today,
   toMinutes,
+  weekday,
   type ISODate,
 } from '@/lib/date';
 import {
+  adjustStock,
   canTrainOn,
   classEnd,
   closureFor,
+  lineTotal,
   membership,
   pauseLength,
   slotState,
@@ -51,6 +54,7 @@ import {
   weekRings,
   XP,
   xpTotal,
+  rewardsOn,
 } from '@/lib/game';
 
 import type {
@@ -61,7 +65,14 @@ import type {
   Challenge,
   Chest,
   GuestPass,
+  LedgerEntry,
+  LineItem,
   LiftKey,
+  Mark,
+  Order,
+  Product,
+  Sale,
+  TeamMember,
   SupplementItem,
   XpEvent,
   Data,
@@ -81,6 +92,7 @@ import type {
   Trainer,
   Settings,
   TicketCategory,
+  TestResult,
 } from './types';
 
 export * from './types';
@@ -92,7 +104,8 @@ type Actions = {
   joinAdmin: (name: string) => void;
   leaveRemote: () => void;
   // member: bookings
-  book: (date: ISODate, kind: 'slot' | 'class', refId: string, opts?: { replace?: string }) => Result;
+  /** A member books for themselves. Staff pass `memberId` to book someone in at the desk. */
+  book: (date: ISODate, kind: 'slot' | 'class', refId: string, opts?: { replace?: string; memberId?: string }) => Result;
   joinWaitlist: (date: ISODate, kind: 'slot' | 'class', refId: string) => Result;
   cancelBooking: (bookingId: string) => Result;
   // member: pauses
@@ -113,14 +126,16 @@ type Actions = {
   decidePause: (pauseId: string, approve: boolean, note?: string) => void;
   /** Finishes adding a member the server has already created: payment, lead, referral reward. */
   addMember: (
-    input: { paid: number; method: PayMethod; leadId?: string },
+    /** `paidOn`: when the money changed hands, for members entered after the fact. Today if missing. */
+    input: { paid: number; method: PayMethod; leadId?: string; paidOn?: ISODate; note?: string; tag?: string; dueDate?: ISODate },
     created: Member,
   ) => string;
   updateMember: (id: string, patch: Partial<Member>) => void;
   removeMember: (id: string) => void;
-  recordPayment: (memberId: string, amount: number, method: PayMethod, note?: string) => Payment;
+  recordPayment: (memberId: string, amount: number, method: PayMethod, note?: string, dueDate?: ISODate) => Payment;
   setSlotCapacity: (slotId: string, capacity: number) => void;
   addSlot: (input: { start: string; end: string; capacity: number; days: number[] }) => Result;
+  updateSlot: (id: string, input: { start: string; end: string; capacity: number; days: number[] }) => Result;
   removeSlot: (id: string) => Result;
   addClass: (c: Omit<GymClass, 'id'>) => void;
   removeClass: (id: string) => Result;
@@ -157,6 +172,23 @@ type Actions = {
   assignDiet: (memberId: string, templateId: string) => void;
   assignWorkout: (memberId: string, templateId: string) => void;
   completeMind: (sessionId: string, minutes: number, title: string) => void;
+  // strength and endurance test
+  saveTestResult: (r: Omit<TestResult, 'id' | 'at'>) => TestResult;
+  removeTestResult: (id: string) => void;
+  // shop
+  saveProduct: (p: Omit<Product, 'id'> & { id?: string }) => void;
+  removeProduct: (id: string) => void;
+  placeOrder: (items: { productId: string; qty: number }[]) => Result;
+  cancelOrder: (id: string) => Result;
+  markOrderReady: (id: string) => void;
+  completeOrder: (id: string, method: PayMethod) => Result;
+  recordSale: (items: { productId: string; qty: number }[], method: PayMethod) => Result;
+  removeSale: (id: string) => void;
+  // staff and the books
+  saveTeamMember: (t: Omit<TeamMember, 'id'> & { id?: string }) => void;
+  markAttendance: (date: ISODate, teamId: string, mark: Mark | null) => void;
+  addLedger: (e: Omit<LedgerEntry, 'id'>) => void;
+  removeLedger: (id: string) => void;
   // app
   setPrefs: (patch: Partial<Prefs>) => void;
   setBrandOverride: (o: BrandOverride | null) => void;
@@ -183,6 +215,8 @@ function notice(memberId: string | null, title: string, body: string, kind: Noti
   return { id: uid('nt'), memberId, title, body, kind, at: nowStamp(), read: false };
 }
 
+const GAME_ONLY = new Set<Celebration['kind']>(['ring', 'allRings', 'league', 'rank', 'badge']);
+
 /**
  * Collects XP, chests and celebrations for one member during an action, then folds level-ups
  * and newly closed rings into a single state patch. Awards with a key are paid once.
@@ -193,18 +227,22 @@ function rewarder(s: AppState, memberId: string) {
   const cel: Celebration[] = [];
   const before = xpTotal(s.xp, memberId);
   const paid = new Set(s.xp.filter((e) => e.memberId === memberId && e.key).map((e) => e.key));
+  const on = rewardsOn(activeBrand().features);
   return {
+    chestsOn: on.chests,
     xp(amount: number, reason: string, key?: string) {
       if (key && paid.has(key)) return false;
       if (key) paid.add(key);
-      xp.push({ id: uid('xp'), memberId, amount, reason, at: nowStamp(), key });
+      if (on.xp) xp.push({ id: uid('xp'), memberId, amount, reason, at: nowStamp(), key });
       return true;
     },
     chest(reason: string) {
-      chests.push({ id: uid('chest'), memberId, reason, earnedAt: nowStamp() });
+      if (on.chests) chests.push({ id: uid('chest'), memberId, reason, earnedAt: nowStamp() });
     },
     celebrate(c: Omit<Celebration, 'id' | 'memberId'>) {
-      cel.push({ ...c, id: uid('cel'), memberId });
+      // Rings, leagues and ranks only exist alongside XP. A check-in or a new record is worth marking either way.
+      if (!on.xp && GAME_ONLY.has(c.kind)) return;
+      cel.push({ ...c, xp: on.xp ? c.xp : undefined, chest: on.chests && c.chest, id: uid('cel'), memberId });
     },
     /** Compare rings before and after the change, paying for any ring closed for the first time this week. */
     rings(next: Pick<AppState, 'checkins' | 'workoutLog' | 'mealLog'>, claimsIn: AppState['ringClaims']) {
@@ -232,7 +270,7 @@ function rewarder(s: AppState, memberId: string) {
         this.celebrate({
           kind: 'allRings',
           title: 'All three rings closed',
-          body: 'Show up, Train and Fuel, all done this week. That earns a bonus chest.',
+          body: `Show up, Train and Fuel, all done this week.${this.chestsOn ? ' That earns a bonus chest.' : ''}`,
           xp: XP.ring * fresh.length + XP.allRings,
           chest: true,
         });
@@ -242,7 +280,7 @@ function rewarder(s: AppState, memberId: string) {
         this.celebrate({
           kind: 'ring',
           title: `${r.label} ring closed`,
-          body: open.length ? `Close ${open.join(' and ')} too for a bonus chest.` : 'Nice work this week.',
+          body: open.length ? `Close ${open.join(' and ')} too${this.chestsOn ? ' for a bonus chest' : ''}.` : 'Nice work this week.',
           xp: XP.ring * fresh.length,
         });
       }
@@ -280,6 +318,18 @@ function nextInvoice(payments: Payment[], date: ISODate) {
     .filter((p) => p.invoice.startsWith(prefix))
     .reduce((m, p) => Math.max(m, Number(p.invoice.slice(prefix.length)) || 0), 0);
   return `${prefix}${String(max + 1).padStart(4, '0')}`;
+}
+
+/** Line items at the shop's current prices, or null if anything asked for isn't on sale. */
+function priced(products: Product[], wanted: { productId: string; qty: number }[]): LineItem[] | null {
+  const items = wanted
+    .filter((w) => w.qty > 0)
+    .map((w) => {
+      const p = products.find((x) => x.id === w.productId && x.active);
+      return p ? { productId: p.id, name: p.name, price: p.price, qty: w.qty } : null;
+    });
+  if (!items.length || items.some((i) => !i)) return null;
+  return items as LineItem[];
 }
 
 let beforeLeave: (() => void) | undefined;
@@ -342,13 +392,14 @@ export const useApp = create<AppState>()(
         // ---- bookings --------------------------------------------------------
         book: (date, kind, refId, opts) => {
           const s = get();
-          const m = me();
-          if (!m) return fail('Sign in to book.');
+          const desk = !!opts?.memberId && s.session?.role === 'manager';
+          const m = desk ? s.members.find((x) => x.id === opts!.memberId) : me();
+          if (!m) return fail(desk ? 'Member not found.' : 'Sign in to book.');
           const blocked = canTrainOn(m, s.plans, s.pauses, date);
           if (blocked) return fail(blocked);
           const t = today();
           if (date < t || diffDays(t, date) >= s.settings.bookingWindowDays) {
-            return fail(`You can book up to ${s.settings.bookingWindowDays} days ahead.`);
+            return fail(`${desk ? 'Bookings open' : 'You can book'} up to ${s.settings.bookingWindowDays} days ahead.`);
           }
           const ref =
             kind === 'slot'
@@ -360,8 +411,9 @@ export const useApp = create<AppState>()(
           if (!ref) return fail('That session no longer exists.');
           if (kind === 'slot' && closureFor(s.closures, date, refId)) return fail('This slot is closed on that day.');
           const st = slotState(s, date, ref, kind, m.id, { date: t, mins: minutesNow() });
-          if (st.started) return fail('This session has already started.');
-          if (st.mine) return fail('You’re already booked into this session.');
+          // The desk can still book someone who is standing there into a session that's under way.
+          if (desk ? st.over : st.started) return fail(desk ? 'This session is over.' : 'This session has already started.');
+          if (st.mine) return fail(desk ? `${m.name} is already booked into this session.` : 'You’re already booked into this session.');
 
           let bookings = s.bookings;
           if (opts?.replace) {
@@ -371,7 +423,11 @@ export const useApp = create<AppState>()(
               (b) => b.memberId === m.id && b.kind === 'slot' && b.date === date && b.status === 'booked',
             );
             if (sameDay.length >= s.settings.maxBookingsPerDay) {
-              return fail(`You can book ${s.settings.maxBookingsPerDay} gym slot a day. Switch your booking instead.`);
+              return fail(
+                desk
+                  ? `${m.name} already has ${s.settings.maxBookingsPerDay === 1 ? 'a slot' : `${s.settings.maxBookingsPerDay} slots`} that day.`
+                  : `You can book ${s.settings.maxBookingsPerDay} gym slot a day. Switch your booking instead.`,
+              );
             }
           }
           if (st.left <= 0) return fail('This session is full.');
@@ -383,7 +439,7 @@ export const useApp = create<AppState>()(
           );
           const booking: Booking = { id: uid('bk'), memberId: m.id, kind, refId, date, status: 'booked', createdAt: nowStamp() };
           set({ bookings: [...bookings, booking] });
-          return ok(`You're in for ${fmtDay(date)}, ${fmtTimeRange(ref.start, ref.end)}.`);
+          return ok(`${desk ? `${m.name} is` : "You're"} in for ${fmtDay(date)}, ${fmtTimeRange(ref.start, ref.end)}.`);
         },
 
         joinWaitlist: (date, kind, refId) => {
@@ -562,7 +618,7 @@ export const useApp = create<AppState>()(
           if (recent) return ok(`${m.name} is already checked in.`);
           if (s.settings.requireBooking) {
             const booked = s.bookings.some((b) => b.memberId === memberId && b.date === t && b.status === 'booked');
-            if (!booked) return fail(`${m.name} hasn’t booked a slot for today. Book one for them first.`);
+            if (!booked) return fail(`${m.name} hasn’t booked a slot for today. Open their profile and tap Book a slot, then check them in.`);
           }
           const checkins = [...s.checkins, { id: uid('ci'), memberId, at: nowStamp(), method }];
           const rw = rewarder(s, memberId);
@@ -580,7 +636,7 @@ export const useApp = create<AppState>()(
                 : visits === m.weeklyGoal
                   ? `That’s ${visits} of ${visits} this week, goal done.`
                   : `Visit ${visits} of ${m.weeklyGoal} this week.`
-            } You earned a chest, open it to see what’s inside.`,
+            }${rw.chestsOn ? ' You earned a chest, open it to see what’s inside.' : ''}`,
             xp: XP.checkIn,
             chest: true,
           });
@@ -679,12 +735,15 @@ export const useApp = create<AppState>()(
                   {
                     id: uid('pay'),
                     memberId: id,
-                    invoice: nextInvoice(s.payments, today()),
-                    date: today(),
+                    invoice: nextInvoice(s.payments, input.paidOn ?? today()),
+                    date: input.paidOn ?? today(),
                     amount: input.paid,
                     method: input.method,
                     planId: plan?.id,
-                    note: 'New joining',
+                    note: input.note || (member.pricingTag ? `New joining (${member.pricingTag})` : 'New joining'),
+                    dueAmount: member.dues,
+                    dueDate: input.dueDate ?? member.duePaymentDate,
+                    tag: input.tag ?? member.pricingTag,
                   },
                 ]
               : s.payments;
@@ -705,7 +764,7 @@ export const useApp = create<AppState>()(
             rw.celebrate({
               kind: 'referral',
               title: `${firstName(member.name)} joined`,
-              body: 'Your guest signed up. Thanks for bringing them in, here’s a chest.',
+              body: `Your guest signed up. Thanks for bringing them in${rw.chestsOn ? ', here’s a chest' : ''}.`,
               xp: XP.referral,
               chest: true,
             });
@@ -724,8 +783,10 @@ export const useApp = create<AppState>()(
             pauses: s.pauses.filter((p) => p.memberId !== id),
           });
         },
-        recordPayment: (memberId, amount, method, note) => {
+        recordPayment: (memberId, amount, method, note, dueDate) => {
           const s = get();
+          const target = s.members.find((m) => m.id === memberId);
+          const newDues = target ? Math.max(0, target.dues - amount) : 0;
           const payment: Payment = {
             id: uid('pay'),
             memberId,
@@ -733,12 +794,31 @@ export const useApp = create<AppState>()(
             date: today(),
             amount,
             method,
-            note: note || 'Dues cleared',
+            note: note || (newDues === 0 ? 'Dues cleared' : 'Partial dues payment'),
+            dueAmount: newDues,
+            dueDate: newDues > 0 ? (dueDate ?? target?.duePaymentDate) : undefined,
+            tag: target?.pricingTag,
           };
           set({
             payments: [...s.payments, payment],
-            members: s.members.map((m) => (m.id === memberId ? { ...m, dues: Math.max(0, m.dues - amount) } : m)),
-            notices: [notice(memberId, 'Payment received', `${money(amount)} by ${method}. Invoice ${payment.invoice}.`, 'payment'), ...s.notices],
+            members: s.members.map((m) =>
+              m.id === memberId
+                ? {
+                    ...m,
+                    dues: newDues,
+                    duePaymentDate: newDues > 0 ? (dueDate !== undefined ? dueDate : m.duePaymentDate) : undefined,
+                  }
+                : m,
+            ),
+            notices: [
+              notice(
+                memberId,
+                'Payment received',
+                `${money(amount)} by ${method}. Invoice ${payment.invoice}.${newDues > 0 ? ` ${money(newDues)} remaining.` : ''}`,
+                'payment',
+              ),
+              ...s.notices,
+            ],
           });
           return payment;
         },
@@ -1113,6 +1193,25 @@ export const useApp = create<AppState>()(
           set({ slots: [...s.slots, { id: uid('sl'), start, end, capacity, days: [...days].sort() }] });
           return ok('Slot added.');
         },
+        updateSlot: (id, { start, end, capacity, days }) => {
+          const s = get();
+          const slot = s.slots.find((x) => x.id === id);
+          if (!slot) return fail('That slot no longer exists.');
+          if (!(start < end)) return fail('The slot has to end after it starts.');
+          if (!(capacity >= 1)) return fail('A slot needs room for at least one person.');
+          if (days.length === 0) return fail('Pick at least one day.');
+          if (s.slots.some((x) => x.id !== id && x.start === start && x.end === end && x.days.some((d) => days.includes(d)))) {
+            return fail('You already have a slot at that time.');
+          }
+          // Members booked on a day the slot stops running would be left holding a booking for nothing.
+          const dropped = days.length < slot.days.length || slot.days.some((d) => !days.includes(d));
+          const stranded = dropped
+            ? s.bookings.filter((b) => b.kind === 'slot' && b.refId === id && b.status !== 'cancelled' && b.date >= today() && !days.includes(weekday(b.date))).length
+            : 0;
+          if (stranded) return fail(`${stranded} booking${stranded === 1 ? ' is' : 's are'} on a day you’re removing. Close the slot on that day instead, or ask them to switch.`);
+          set({ slots: s.slots.map((x) => (x.id === id ? { ...x, start, end, capacity, days: [...days].sort() } : x)) });
+          return ok('Slot updated.');
+        },
         removeSlot: (id) => {
           const s = get();
           const live = s.bookings.filter((b) => b.kind === 'slot' && b.refId === id && b.status !== 'cancelled' && b.date >= today()).length;
@@ -1142,6 +1241,95 @@ export const useApp = create<AppState>()(
             notices: [notice(memberId, 'New workout plan', `${plan.title}. Open Workout to see today’s session.`, 'reminder'), ...s.notices],
           });
         },
+
+        // ---- the shop ---------------------------------------------------------
+        saveProduct: ({ id, ...p }) => {
+          const s = get();
+          if (id && s.products.some((x) => x.id === id)) set({ products: s.products.map((x) => (x.id === id ? { ...p, id } : x)) });
+          else set({ products: [...s.products, { ...p, id: uid('pr') }] });
+        },
+        removeProduct: (id) => set({ products: get().products.filter((x) => x.id !== id) }),
+        placeOrder: (wanted) => {
+          const s = get();
+          const meNow = me();
+          if (!meNow) return fail('Sign in as a member to reserve.');
+          const items = priced(s.products, wanted);
+          if (!items) return fail('Something in your bag is no longer for sale.');
+          const order: Order = { id: uid('ord'), memberId: meNow.id, items, total: lineTotal(items), status: 'requested', createdAt: nowStamp() };
+          set({ orders: [...s.orders, order] });
+          return ok(`Reserved. Pay ${money(order.total)} at the desk when you collect it.`);
+        },
+        cancelOrder: (id) => {
+          const s = get();
+          const o = s.orders.find((x) => x.id === id);
+          if (!o || o.status !== 'requested') return fail('The desk has already started on this one. Ask them at the desk.');
+          set({ orders: s.orders.map((x) => (x.id === id ? { ...x, status: 'cancelled' } : x)) });
+          return ok('Reservation cancelled.');
+        },
+        markOrderReady: (id) => {
+          const s = get();
+          const o = s.orders.find((x) => x.id === id);
+          if (!o) return;
+          set({
+            orders: s.orders.map((x) => (x.id === id ? { ...x, status: 'ready' } : x)),
+            notices: [notice(o.memberId, 'Your order is ready', `Collect it at the desk and pay ${money(o.total)}.`, 'reminder'), ...s.notices],
+          });
+        },
+        completeOrder: (id, method) => {
+          const s = get();
+          const o = s.orders.find((x) => x.id === id);
+          if (!o || o.status === 'done' || o.status === 'cancelled') return fail('That order is already closed.');
+          const sale: Sale = { id: uid('sale'), date: today(), items: o.items, total: o.total, method, memberId: o.memberId, orderId: o.id, at: nowStamp() };
+          set({
+            orders: s.orders.map((x) => (x.id === id ? { ...x, status: 'done', saleId: sale.id } : x)),
+            sales: [...s.sales, sale],
+            products: adjustStock(s.products, o.items),
+          });
+          return ok(`${money(o.total)} received by ${method}.`);
+        },
+        recordSale: (wanted, method) => {
+          const s = get();
+          const items = priced(s.products, wanted);
+          if (!items) return fail('Pick at least one item.');
+          const sale: Sale = { id: uid('sale'), date: today(), items, total: lineTotal(items), method, at: nowStamp() };
+          set({ sales: [...s.sales, sale], products: adjustStock(s.products, items) });
+          return ok(`Sale of ${money(sale.total)} saved.`);
+        },
+        removeSale: (id) => {
+          const s = get();
+          const sale = s.sales.find((x) => x.id === id);
+          if (!sale) return;
+          set({
+            sales: s.sales.filter((x) => x.id !== id),
+            products: adjustStock(s.products, sale.items, -1),
+            // A reservation whose sale is undone goes back to waiting at the desk.
+            orders: s.orders.map((o) => (o.saleId === id ? { ...o, status: 'ready', saleId: undefined } : o)),
+          });
+        },
+
+        // ---- staff and the books ---------------------------------------------------
+        saveTeamMember: ({ id, ...t }) => {
+          const s = get();
+          if (id && s.team.some((x) => x.id === id)) set({ team: s.team.map((x) => (x.id === id ? { ...x, ...t, id } : x)) });
+          else set({ team: [...s.team, { ...t, id: uid('tm') }] });
+        },
+        markAttendance: (date, teamId, mark) => {
+          const s = get();
+          const day = { ...(s.attendance[date] ?? {}) };
+          if (mark && mark !== 'P') day[teamId] = mark;
+          else delete day[teamId];
+          set({ attendance: { ...s.attendance, [date]: day } });
+        },
+        addLedger: (e) => set({ ledger: [...get().ledger, { ...e, id: uid('led') }] }),
+        removeLedger: (id) => set({ ledger: get().ledger.filter((x) => x.id !== id) }),
+
+        // ---- strength and endurance test ---------------------------------------
+        saveTestResult: (input) => {
+          const result: TestResult = { ...input, id: uid('ft'), at: nowStamp() };
+          set({ testResults: [...get().testResults, result] });
+          return result;
+        },
+        removeTestResult: (id) => set({ testResults: get().testResults.filter((r) => r.id !== id) }),
 
         // ---- app -------------------------------------------------------------
         setPrefs: (patch) => set({ prefs: { ...get().prefs, ...patch } }),

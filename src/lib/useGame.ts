@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import { activeBrand } from '@/config/active';
 import { useApp, useMe } from '@/store';
 
 import { addDays, diffDays, startOfWeek, type ISODate } from './date';
@@ -12,6 +13,7 @@ import {
   leagueStandings,
   levelFor,
   prCount,
+  rewardsOn,
   strengthHistory,
   strengthScore,
   tierFor,
@@ -40,6 +42,7 @@ export function useGame(t: ISODate) {
   const guestPasses = useApp((s) => s.guestPasses);
   const mindLog = useApp((s) => s.mindLog);
   const ringClaims = useApp((s) => s.ringClaims);
+  const chestsOn = rewardsOn(activeBrand().features).chests;
 
   return useMemo(() => {
     if (!me) return undefined;
@@ -110,9 +113,9 @@ export function useGame(t: ISODate) {
       strength,
       boards,
       badges: list,
-      chests: unopened(chests, me.id),
+      chests: chestsOn ? unopened(chests, me.id) : [],
     };
-  }, [me, t, xp, chests, lifts, progress, workouts, workoutLog, mealLog, dietPlans, checkins, members, leagueTier, challenges, challengeEntries, guestPasses, mindLog, ringClaims]);
+  }, [me, t, xp, chests, chestsOn, lifts, progress, workouts, workoutLog, mealLog, dietPlans, checkins, members, leagueTier, challenges, challengeEntries, guestPasses, mindLog, ringClaims]);
 }
 
 export type GameState = NonNullable<ReturnType<typeof useGame>>;

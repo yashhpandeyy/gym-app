@@ -5,8 +5,11 @@ import type { ISODate } from '@/lib/date';
 
 export type Role = 'member' | 'manager' | 'admin';
 
-/** `remote` marks a sign-in to a real gym on the server, as opposed to the offline demo data. */
-export type Session = { role: Role; memberId?: string; staffName?: string; remote?: boolean };
+/**
+ * `remote` marks a sign-in to a real gym on the server, as opposed to the offline demo data.
+ * `owner` is learned from the server: managers are the owner or front-desk staff, and only the owner sees pay and the books.
+ */
+export type Session = { role: Role; memberId?: string; staffName?: string; remote?: boolean; owner?: boolean };
 
 export type GymLink = { gymCode: string; gymName: string; name: string; status: 'pending' | 'active' };
 
@@ -49,6 +52,22 @@ export type Member = {
   bonusGuestPasses?: number;
   /** How many of those the member has already handed out. Only the gym can change `bonusGuestPasses`. */
   bonusUsed?: number;
+  /** Signs this member's check-in QR. Set by the server, replaced with each new login code, never shown to other members. */
+  passKey?: string;
+  /** The last day the gym sent a "we miss you" message, so nobody gets two in a row. */
+  nudgedOn?: ISODate;
+  /** ID of linked partner for couple memberships. */
+  partnerMemberId?: string;
+  partnerName?: string;
+  partnerPhone?: string;
+  isPartner?: boolean;
+  /** Tag for special pricing or context: Couple, Special Price, Doctor Rec., Student, etc. */
+  pricingTag?: string;
+  originalPrice?: number;
+  discountAmount?: number;
+  finalPrice?: number;
+  /** Expected / promised date for clearing remaining dues. */
+  duePaymentDate?: ISODate;
 };
 
 export type PauseStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
@@ -117,6 +136,9 @@ export type Payment = {
   method: PayMethod;
   planId?: string;
   note?: string;
+  dueAmount?: number;
+  dueDate?: ISODate;
+  tag?: string;
 };
 
 export type AnnouncementKind = 'notice' | 'holiday' | 'event' | 'offer';
@@ -216,6 +238,8 @@ export type Chest = {
   prize?: Prize;
   /** For prizes the desk hands over (a shake, merch). */
   redeemedAt?: string;
+  /** Set by the server on chests earned on the member's own phone. These pay XP only. */
+  selfEarned?: boolean;
 };
 
 /** One logged set. e1RM is derived, not stored. */
@@ -295,6 +319,94 @@ export type SupplementItem = {
 
 export type MindSession = { id: string; memberId: string; sessionId: string; minutes: number; at: string };
 
+// ---- Strength and endurance test --------------------------------------------------------
+
+/** What a test exercise records: reps done, weight lifted, a distance (sit and reach), or a time. */
+export type TestMeasure = 'reps' | 'kg' | 'cm' | 'time';
+/** One exercise in the gym's test. The owner sets every number. */
+export type TestItem = {
+  id: string;
+  name: string;
+  how?: string;
+  measure: TestMeasure;
+  /** Sets or attempts. Reps add up across sets; weight, distance and time keep the best one. */
+  sets: number;
+  /** Reps to aim for in each set, as guidance ("3 sets of 10"). */
+  reps?: number;
+  /** A countdown for each set, in seconds. The timer rings when it runs out. */
+  seconds?: number;
+  /** Rest between sets, in seconds. */
+  rest?: number;
+  /** The result that earns full marks. Seconds for a time. */
+  target: number;
+  /** For weight: the target is this many times the member's bodyweight. */
+  perBodyweight?: boolean;
+  /** Whether more is better (reps, a plank) or less (a timed walk). */
+  better: 'higher' | 'lower';
+  active: boolean;
+};
+/** How one exercise went, with the item's name and target copied in so old results still read right after the owner edits the test. */
+export type TestLine = { itemId: string; name: string; measure: TestMeasure; better: 'higher' | 'lower'; sets: number[]; value: number; target: number; score: number };
+export type TestResult = { id: string; memberId: string; date: ISODate; at: string; score: number; bodyweight?: number; lines: TestLine[]; skipped?: string[]; by?: string };
+
+// ---- The shop ------------------------------------------------------------------------
+
+export type ProductCategory = 'Supplements' | 'Drinks' | 'Gear' | 'Clothing' | 'Other';
+export type Product = {
+  id: string;
+  name: string;
+  category: ProductCategory;
+  price: number;
+  /** How many are on the shelf. Missing means the gym doesn't count stock for this one. */
+  stock?: number;
+  about?: string;
+  /** A small JPEG as a data URI. */
+  photo?: string;
+  active: boolean;
+};
+export type LineItem = { productId: string; name: string; price: number; qty: number };
+/** A member's reservation. They pay at the desk when they collect it. */
+export type OrderStatus = 'requested' | 'ready' | 'done' | 'cancelled';
+export type Order = { id: string; memberId: string; items: LineItem[]; total: number; status: OrderStatus; createdAt: string; saleId?: string };
+/** Money taken for shop items, from a reservation or over the counter. */
+export type Sale = { id: string; date: ISODate; items: LineItem[]; total: number; method: PayMethod; memberId?: string; orderId?: string; at: string };
+
+// ---- Staff, attendance and the books --------------------------------------------------
+
+export type PayType = 'monthly' | 'daily';
+/** Someone who works at the gym. Front-desk staff see the name and days off, never the pay. */
+export type TeamMember = {
+  id: string;
+  name: string;
+  role: string;
+  phone?: string;
+  payType?: PayType;
+  /** Monthly salary, or pay per day worked. */
+  pay?: number;
+  /** Weekly days off, 0 = Sunday. */
+  offDays: number[];
+  joinedOn: ISODate;
+  active: boolean;
+};
+/** P present, H half day, L paid leave, A absent (unpaid). A working day nobody marked counts as present. */
+export type Mark = 'P' | 'H' | 'L' | 'A';
+export type AttendanceDay = Record<string, Mark>;
+
+export type LedgerDir = 'in' | 'out';
+/** Money in or out that isn't a membership or a shop sale: rent, salaries, stock, machines, personal training. */
+export type LedgerEntry = {
+  id: string;
+  dir: LedgerDir;
+  date: ISODate;
+  category: string;
+  amount: number;
+  note?: string;
+  method?: PayMethod;
+  /** For salaries: who was paid, and for which month (YYYY-MM). */
+  teamId?: string;
+  period?: string;
+};
+
 export type Settings = {
   bookingWindowDays: number;
   cancelCutoffMinutes: number;
@@ -308,6 +420,12 @@ export type Settings = {
   guestPassDays: number;
   guestPassesPerMonth: number;
   guestWithHost: boolean;
+  /** Members are listed as "not coming" after this many days without a visit. */
+  awayAfterDays?: number;
+  /** The WhatsApp message for them. {name}, {days} and {gym} are filled in. */
+  awayMessage?: string;
+  /** The gym's strength and endurance test. Missing means the standard one. */
+  strengthTest?: TestItem[];
 };
 
 export type Prefs = {
@@ -360,6 +478,15 @@ export type Data = {
   supplements: Record<string, SupplementItem[]>;
   supplementLog: Record<string, Record<ISODate, string[]>>;
   mindLog: MindSession[];
+  testResults: TestResult[];
+  // shop
+  products: Product[];
+  orders: Order[];
+  sales: Sale[];
+  // running the gym
+  team: TeamMember[];
+  attendance: Record<ISODate, AttendanceDay>;
+  ledger: LedgerEntry[];
 };
 
 export type Result = { ok: true; message?: string } | { ok: false; message: string };

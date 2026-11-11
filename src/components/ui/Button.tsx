@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 
 import { haptic } from '@/lib/native';
@@ -22,6 +22,7 @@ export function Button({
   full,
   style,
   accessibilityLabel,
+  tag,
 }: {
   title: string;
   onPress?: () => void;
@@ -34,8 +35,10 @@ export function Button({
   full?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  /** A small label inside the button after the title, like "Updated". */
+  tag?: string;
 }) {
-  const { c, radius, alpha, mix } = useTheme();
+  const { c, radius, alpha } = useTheme();
   const s = useStyles();
   const palette: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = {
     primary: { bg: c.primary, fg: c.onPrimary },
@@ -49,20 +52,10 @@ export function Button({
   };
   const p = palette[variant];
   const dims = {
-    lg: { height: 52, px: 22, r: radius.md, icon: 20, text: 'bodyStrong' as const },
-    md: { height: 42, px: 16, r: radius.md - 2, icon: 18, text: 'label' as const },
-    sm: { height: 32, px: 12, r: radius.sm, icon: 16, text: 'smallStrong' as const },
+    lg: { height: Platform.OS === 'web' ? 44 : 54, px: 22, r: radius.md, icon: 20, text: 'bodyStrong' as const },
+    md: { height: Platform.OS === 'web' ? 38 : 42, px: 16, r: radius.md - 2, icon: 18, text: 'label' as const },
+    sm: { height: Platform.OS === 'web' ? 30 : 32, px: 12, r: radius.sm, icon: 16, text: 'smallStrong' as const },
   }[size];
-  // Duolingo-style chunky buttons: a darker bottom edge that squashes flat when pressed.
-  const edges: Partial<Record<ButtonVariant, string>> = {
-    primary: c.primaryDeep,
-    ink: mix(c.ink, '#000000', 0.45),
-    success: mix(c.success.solid, '#000000', 0.28),
-    onPrimary: alpha('#000000', 0.2),
-    outline: c.lineStrong,
-  };
-  const edgeColor = edges[variant];
-  const chunk = edgeColor ? (size === 'sm' ? 3 : 4) : 0;
   const { backgroundColor: bgOverride, ...outer } = (StyleSheet.flatten(style) ?? {}) as ViewStyle;
   const bg = (bgOverride as string | undefined) ?? p.bg;
   const reduced = useReducedMotion();
@@ -70,10 +63,10 @@ export function Button({
   const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
 
   return (
-    <Animated.View style={[{ height: dims.height + chunk, alignSelf: full ? 'stretch' : 'flex-start' }, outer, disabled && s.disabled, popStyle]}>
+    <Animated.View style={[{ height: dims.height, alignSelf: full ? 'stretch' : 'flex-start' }, outer, disabled && s.disabled, popStyle]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel ?? title}
+        accessibilityLabel={accessibilityLabel ?? (tag ? `${title}, ${tag}` : title)}
         accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
         disabled={disabled || loading}
         onPressIn={() => {
@@ -86,24 +79,21 @@ export function Button({
           if (variant === 'primary' || variant === 'ink' || variant === 'success') haptic.tap();
           onPress?.();
         }}
-        style={({ pressed }) => {
-          const squash = pressed && chunk ? chunk - 1 : 0;
-          return [
-            s.base,
-            {
-              height: dims.height + chunk - squash,
-              marginTop: squash,
-              paddingHorizontal: dims.px,
-              borderRadius: dims.r,
-              backgroundColor: pressed && variant === 'ghost' ? alpha(c.primary, 0.08) : bg,
-              borderColor: p.border ?? 'transparent',
-              borderWidth: p.border ? 1.5 : 0,
-              borderBottomWidth: chunk ? chunk - squash + (p.border ? 1.5 : 0) : p.border ? 1.5 : 0,
-              borderBottomColor: edgeColor ?? p.border ?? 'transparent',
-            },
-            !chunk && pressed && s.pressed,
-          ];
-        }}>
+        style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+          s.base,
+          {
+            height: dims.height,
+            paddingHorizontal: dims.px,
+            borderRadius: dims.r,
+            backgroundColor: pressed && variant === 'ghost' ? alpha(c.primary, 0.08) : bg,
+            borderColor: p.border ?? 'transparent',
+            borderWidth: p.border ? 1 : 0,
+            borderCurve: 'continuous',
+          },
+          pressed && s.pressed,
+          Platform.OS === 'web' && { cursor: 'pointer' as never },
+          Platform.OS === 'web' && hovered && !pressed && { opacity: 0.9 },
+        ]}>
         {loading ? (
           <ActivityIndicator color={p.fg} />
         ) : (
@@ -112,6 +102,14 @@ export function Button({
             <Text variant={dims.text} color={p.fg} numberOfLines={1}>
               {title}
             </Text>
+            {tag ? (
+              <View style={[s.tag, { backgroundColor: alpha(p.fg, 0.16) }]}>
+                <Icon name="sparkles" size={11} color={p.fg} />
+                <Text variant="caption" color={p.fg} numberOfLines={1}>
+                  {tag}
+                </Text>
+              </View>
+            ) : null}
             {iconRight ? <Icon name={iconRight} size={dims.icon} color={p.fg} /> : null}
           </>
         )}
@@ -152,10 +150,12 @@ export function IconButton({
       accessibilityLabel={label}
       hitSlop={6}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         s.iconBtn,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: bg },
+        { width: size, height: size, borderRadius: Platform.OS === 'web' ? 10 : size / 2, backgroundColor: bg },
         variant === 'surface' && { borderWidth: 1, borderColor: c.line },
+        Platform.OS === 'web' && { cursor: 'pointer' as never },
+        Platform.OS === 'web' && hovered && !pressed && { backgroundColor: c.surfaceAlt },
         pressed && s.pressed,
       ]}>
       <Icon name={icon} size={Math.round(size * 0.5)} color={fg} />
@@ -207,6 +207,7 @@ const useStyles = makeStyles((t) => ({
   },
   pressed: { opacity: 0.86, transform: [{ scale: 0.985 }] },
   disabled: { opacity: 0.42 },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
   iconBtn: { alignItems: 'center', justifyContent: 'center' },
   badge: {
     position: 'absolute',

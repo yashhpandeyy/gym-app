@@ -5,7 +5,7 @@ import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated'
 
 import { Avatar, Button, Card, Empty, Icon, Input, Screen, Segmented, Sheet, Text, toast } from '@/components/ui';
 import { diffDays, fmtDay } from '@/lib/date';
-import { formatScore, parseScore } from '@/lib/game';
+import { formatScore, parseScore, rewardsOn } from '@/lib/game';
 import { useNow } from '@/lib/hooks';
 import { useGame } from '@/lib/useGame';
 import { useApp } from '@/store';
@@ -14,7 +14,7 @@ import { makeStyles, useTheme } from '@/theme';
 type Scope = 'slot' | 'gym';
 
 export default function ChallengeDetail() {
-  const { c } = useTheme();
+  const { c, brand } = useTheme();
   const s = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const now = useNow(60_000);
@@ -160,7 +160,7 @@ export default function ChallengeDetail() {
         <Empty icon="stopwatch-outline" title="Nobody yet" body="Be the first on the board this month." />
       )}
       <Text variant="caption" tone="faint" style={{ marginTop: 12 }}>
-        Boards reset on the 1st. The top spot in each slot earns a chest and the Local legend badge. Coaches can check any time that looks too good.
+        Boards reset on the 1st. The top spot in each slot earns {rewardsOn(brand.features).chests ? 'a chest and ' : ''}the Local legend badge. Coaches can check any time that looks too good.
       </Text>
 
       <Sheet

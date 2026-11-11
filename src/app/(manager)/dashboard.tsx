@@ -1,27 +1,29 @@
 import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { BrandLockup } from '@/components/Brand';
 import { BarChart } from '@/components/Charts';
 import { CrowdMeter, SpotMeter } from '@/components/Meters';
+import { useWideWeb } from '@/components/web/WebShell';
 import {
   Avatar,
   Button,
   Card,
-  Divider,
-  Fact,
   Group,
+  Icon,
   IconButton,
   Row,
   Screen,
   SectionHeader,
+  Stat,
+  StatStrip,
   Text,
 } from '@/components/ui';
 import { addDays, fmtClockRange, fmtDate, fmtLongDay, fmtRelativeInline, fmtTime, MONTHS_LONG, parts, toMinutes, WEEKDAYS_LONG, weekday } from '@/lib/date';
-import { checkinsOn, crowdNow, hoursOn, membership, nextOpening, revenueByMonth, slotsOn, slotState } from '@/lib/domain';
+import { awayAfterDays, awayMembers, checkinsOn, crowdNow, hoursOn, membership, monthBooks, nextOpening, revenueByMonth, slotsOn, slotState } from '@/lib/domain';
 import { firstName, money } from '@/lib/format';
-import { useGym, useNow } from '@/lib/hooks';
+import { useGym, useIsOwner, useNow } from '@/lib/hooks';
 import { whatsapp } from '@/lib/native';
 import { useApp } from '@/store';
 import { makeStyles, useTheme } from '@/theme';
@@ -29,6 +31,7 @@ import { makeStyles, useTheme } from '@/theme';
 export default function Dashboard() {
   const { brand } = useTheme();
   const s = useStyles();
+  const wide = useWideWeb();
   const now = useNow();
   const gym = useGym();
   const payments = useApp((st) => st.payments);
@@ -38,6 +41,11 @@ export default function Dashboard() {
   const chests = useApp((st) => st.chests);
   const guestPasses = useApp((st) => st.guestPasses);
   const guestDays = useApp((st) => st.settings.guestPassDays);
+  const awayDays = useApp((st) => awayAfterDays(st.settings));
+  const orders = useApp((st) => st.orders);
+  const sales = useApp((st) => st.sales);
+  const ledger = useApp((st) => st.ledger);
+  const owner = useIsOwner();
 
   const infos = useMemo(
     () => gym.members.map((m) => ({ m, info: membership(m, gym.plans, gym.pauses, now.date) })),
@@ -57,6 +65,11 @@ export default function Dashboard() {
   const pendingCoach = ptRequests.filter((r) => r.status === 'pending').length;
   const prizesToHand = chests.filter((x) => x.prize && (x.prize.kind === 'shake' || x.prize.kind === 'merch') && !x.redeemedAt).length;
   const guestsOnWeek = guestPasses.filter((g) => !g.joinedAs && g.activatedOn && now.date <= addDays(g.activatedOn, guestDays - 1)).length;
+  const reserved = orders.filter((o) => o.status === 'requested').length;
+  const away = useMemo(() => awayMembers(gym, now.date, awayDays), [gym, now.date, awayDays]);
+  // Messaged counts only if it was after their last visit; a message from an earlier absence doesn't.
+  const awayUnmessaged = away.filter((a) => !a.member.nudgedOn || (a.lastVisit !== undefined && a.member.nudgedOn <= a.lastVisit)).length;
+  const books = useMemo(() => monthBooks(now.date.slice(0, 7), payments, sales, ledger), [now.date, payments, sales, ledger]);
   const joinedThisMonth = gym.members.filter((m) => m.joinedOn.slice(0, 7) === now.date.slice(0, 7)).length;
 
   const inToday = checkinsOn(gym, now.date, now.mins);
@@ -72,6 +85,15 @@ export default function Dashboard() {
 
   const attention = [
     { show: pendingPauses > 0, icon: 'airplane-outline' as const, title: 'Pause requests', subtitle: 'Members waiting for a yes or no', value: String(pendingPauses), go: () => router.push('/manage/requests') },
+    { show: reserved > 0, icon: 'bag-handle-outline' as const, title: 'Shop reservations', subtitle: 'Members waiting to collect', value: String(reserved), go: () => router.push('/manage/store') },
+    {
+      show: away.length > 0,
+      icon: 'sad-outline' as const,
+      title: 'Not coming',
+      subtitle: awayUnmessaged ? `No visit in ${awayDays}+ days, ${awayUnmessaged} not messaged yet` : `No visit in ${awayDays}+ days, all messaged`,
+      value: String(away.length),
+      go: () => router.push({ pathname: '/members', params: { filter: 'away' } }),
+    },
     { show: ending.length > 0, icon: 'hourglass-outline' as const, title: 'Ending this week', subtitle: 'Send a renewal reminder', value: String(ending.length), go: () => router.push({ pathname: '/members', params: { filter: 'ending' } }) },
     { show: owing.length > 0, icon: 'wallet-outline' as const, title: 'Unpaid dues', subtitle: `${owing.length} members owe money`, value: money(duesTotal), go: () => router.push({ pathname: '/manage/payments', params: { tab: 'dues' } }) },
     { show: openTickets > 0, icon: 'construct-outline' as const, title: 'Open complaints', subtitle: 'Equipment, cleanliness and more', value: String(openTickets), go: () => router.push('/manage/tickets') },
@@ -87,33 +109,25 @@ export default function Dashboard() {
       `Hi ${firstName(name)}, your ${plan} membership at ${brand.name} ends on ${fmtDate(end)}. Renew in the app or at the desk to keep training without a break.`,
     );
 
-  return (
-    <Screen
-      left={<BrandLockup size={32} />}
-      right={<IconButton icon="settings-outline" label="Rules and settings" onPress={() => router.push('/manage/settings')} />}>
-      <View style={s.head}>
-        <Text variant="title">Today</Text>
-        <Text tone="soft">
-          {fmtLongDay(now.date)}.{' '}
-          {hours ? (now.mins < toMinutes(hours.close) ? `Open until ${fmtTime(hours.close)}.` : 'Closed for the day.') : 'Closed today.'}
-        </Text>
-      </View>
+  const settings = <IconButton icon="settings-outline" label="Rules and settings" onPress={() => router.push('/manage/settings')} />;
 
-      <Card style={{ gap: 16 }}>
-        <CrowdMeter ratio={crowd.ratio} level={crowd.level} inside={crowd.inside} closedNote={nextOpening(now.date, now.mins)} />
-        <Divider />
-        <View style={s.facts}>
-          <Fact label="Checked in" value={String(inToday)} />
-          <Fact
-            label={`vs last ${WEEKDAYS_LONG[weekday(now.date)].slice(0, 3)}`}
-            value={`${diff >= 0 ? '+' : '−'}${Math.abs(diff)}`}
-            tone={diff >= 0 ? 'success' : 'danger'}
-          />
-          <Fact label="Booked today" value={String(bookedToday)} />
-        </View>
-      </Card>
+  const openLine = brand.hours.length === 0 ? '' : ` ${hours ? (now.mins < toMinutes(hours.close) ? `Open until ${fmtTime(hours.close)}.` : 'Closed for the day.') : 'Closed today.'}`;
 
-      <SectionHeader title="Needs you" />
+  const checkedIn = <Stat label="Checked in" value={String(inToday)} note={`${diff >= 0 ? '+' : '−'}${Math.abs(diff)} vs last ${WEEKDAYS_LONG[weekday(now.date)].slice(0, 3)}`} noteTone={diff > 0 ? 'success' : diff < 0 ? 'danger' : 'soft'} />;
+  const booked = <Stat label="Booked today" value={String(bookedToday)} />;
+  const activeStat = <Stat label="Active" value={String(active)} />;
+  const pausedStat = <Stat label="Paused" value={String(paused)} tone="ice" />;
+  const joinedStat = <Stat label={wide ? 'Joined this month' : 'Joined'} value={String(joinedThisMonth)} />;
+
+  const floor = (
+    <Card>
+      <CrowdMeter ratio={crowd.ratio} level={crowd.level} inside={crowd.inside} closedNote={nextOpening(now.date, now.mins)} />
+    </Card>
+  );
+
+  const needsYou = (
+    <>
+      <SectionHeader title="Needs you" style={wide ? s.firstHeader : undefined} />
       {attention.length ? (
         <Group>
           {attention.map((a) => (
@@ -128,7 +142,11 @@ export default function Dashboard() {
           </Text>
         </Card>
       )}
+    </>
+  );
 
+  const slotsToday = (
+    <>
       <SectionHeader title="Today’s slots" action="Manage slots" onAction={() => router.push('/slots')} />
       <Card style={{ gap: 14 }}>
         {todaysSlots.length ? (
@@ -157,8 +175,12 @@ export default function Dashboard() {
           </Text>
         )}
       </Card>
+    </>
+  );
 
-      <SectionHeader title="Money" action="Payments" onAction={() => router.push('/manage/payments')} />
+  const money_ = (
+    <>
+      <SectionHeader title="Money" action="Payments" onAction={() => router.push('/manage/payments')} style={wide ? s.firstHeader : undefined} />
       <Card style={{ gap: 16 }}>
         <View>
           <Text variant="small" tone="soft">
@@ -175,48 +197,107 @@ export default function Dashboard() {
           data={revenue.map((r, i) => ({ label: r.label, value: r.total, highlight: i === revenue.length - 1 }))}
           format={(v) => money(v, { compact: true })}
         />
+        {owner ? (
+          <Pressable accessibilityRole="button" onPress={() => router.push('/manage/books')} style={({ pressed }) => [s.profit, pressed && { opacity: 0.7 }]}>
+            <View style={{ flex: 1 }}>
+              <Text variant="small" tone="soft">
+                Profit this month, after {money(books.totalOut, { compact: true })} spent
+              </Text>
+              <Text variant="h3" tone={books.profit < 0 ? 'danger' : 'ink'}>
+                {money(books.profit)}
+              </Text>
+            </View>
+            <Icon name="chevron-forward" size={18} tone="faint" />
+          </Pressable>
+        ) : null}
       </Card>
+    </>
+  );
 
-      <Card style={[s.facts, { marginTop: 12 }]}>
-        <Fact label="Active members" value={String(active)} />
-        <Fact label="Paused" value={String(paused)} tone="ice" />
-        <Fact label="Joined this month" value={String(joinedThisMonth)} />
-      </Card>
+  const endingSoon = ending.length ? (
+    <>
+      <SectionHeader title="Ending soon" action="See all" onAction={() => router.push({ pathname: '/members', params: { filter: 'ending' } })} />
+      <Group>
+        {ending.slice(0, 5).map(({ m, info }) => (
+          <Row
+            key={m.id}
+            leading={<Avatar name={m.name} size={36} />}
+            title={m.name}
+            subtitle={`${info.plan?.name ?? 'Plan'} ends ${fmtRelativeInline(info.end, now.date)}`}
+            chevron={false}
+            onPress={() => router.push(`/manage/member/${m.id}`)}
+            action={<Button title="Remind" icon="logo-whatsapp" size="sm" variant="soft" onPress={() => remind(m.name, m.phone, info.plan?.name ?? '', info.end)} />}
+          />
+        ))}
+      </Group>
+    </>
+  ) : null;
 
-      {ending.length ? (
+  return (
+    <Screen left={<BrandLockup size={32} />} right={wide ? undefined : settings}>
+      <View style={s.head}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="title">Today</Text>
+          <Text tone="soft">
+            {fmtLongDay(now.date)}.{openLine}
+          </Text>
+        </View>
+        {wide ? settings : null}
+      </View>
+
+      {wide ? (
         <>
-          <SectionHeader title="Ending soon" action="See all" onAction={() => router.push({ pathname: '/members', params: { filter: 'ending' } })} />
-          <Group>
-            {ending.slice(0, 5).map(({ m, info }) => (
-              <Row
-                key={m.id}
-                leading={<Avatar name={m.name} size={36} />}
-                title={m.name}
-                subtitle={`${info.plan?.name ?? 'Plan'} ends ${fmtRelativeInline(info.end, now.date)}`}
-                chevron={false}
-                onPress={() => router.push(`/manage/member/${m.id}`)}
-                action={
-                  <Button
-                    title="Remind"
-                    icon="logo-whatsapp"
-                    size="sm"
-                    variant="soft"
-                    onPress={() => remind(m.name, m.phone, info.plan?.name ?? '', info.end)}
-                  />
-                }
-              />
-            ))}
-          </Group>
+          <StatStrip>
+            {checkedIn}
+            {booked}
+            {activeStat}
+            {pausedStat}
+            {joinedStat}
+          </StatStrip>
+          <View style={s.cols}>
+            <View style={s.colMain}>
+              {needsYou}
+              {slotsToday}
+            </View>
+            <View style={s.colSide}>
+              {money_}
+              <SectionHeader title="On the floor" />
+              {floor}
+              {endingSoon}
+            </View>
+          </View>
         </>
-      ) : null}
+      ) : (
+        <>
+          <StatStrip>
+            {checkedIn}
+            {booked}
+          </StatStrip>
+          <View style={{ marginTop: 12 }}>{floor}</View>
+          {needsYou}
+          {slotsToday}
+          {money_}
+          <StatStrip style={{ marginTop: 12 }}>
+            {activeStat}
+            {pausedStat}
+            {joinedStat}
+          </StatStrip>
+          {endingSoon}
+        </>
+      )}
     </Screen>
   );
 }
 
-const useStyles = makeStyles(() => ({
-  head: { marginTop: 4, marginBottom: 20, gap: 4 },
-  facts: { flexDirection: 'row', justifyContent: 'space-between' },
+const useStyles = makeStyles((t) => ({
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, marginBottom: 20 },
+  cols: { flexDirection: 'row', alignItems: 'flex-start', gap: 28, marginTop: 28 },
+  colMain: { flex: 3, minWidth: 0 },
+  colSide: { flex: 2, minWidth: 0 },
+  // The first heading in a column sits level with its neighbour, not a section's width below it.
+  firstHeader: { marginTop: 0 },
   slotRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   slotTime: { width: 118 },
   slotCount: { width: 44, textAlign: 'right' },
+  profit: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.c.line, paddingTop: 14 },
 }));

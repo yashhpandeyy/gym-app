@@ -2,7 +2,7 @@ import { Redirect } from 'expo-router';
 
 import { useApp } from '@/store';
 
-/** Entry point: send people to the right side of the app for who they are. */
+/** Entry point: send people to the right side of the app for who they are. Members can use the website too, installed to their home screen. */
 export default function Index() {
   const session = useApp((s) => s.session);
   const link = useApp((s) => s.link);

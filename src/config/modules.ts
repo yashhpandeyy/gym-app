@@ -1,13 +1,23 @@
 import type { FeatureKey } from './brand';
 
 /** The parts of the app a gym owner can switch off. Everything starts on. */
-export const MODULES: { key: FeatureKey; title: string; subtitle: string; icon: string }[] = [
+export const MODULES: { key: FeatureKey; title: string; subtitle: string; icon: string; needs?: { key: FeatureKey; hint: string } }[] = [
   { key: 'classes', title: 'Group classes', subtitle: 'Yoga, Zumba and other timetabled sessions', icon: 'people-outline' },
   { key: 'trainers', title: 'Personal training', subtitle: 'Members can request a coach', icon: 'barbell-outline' },
   { key: 'workouts', title: 'Workout plans', subtitle: 'A plan to follow and log', icon: 'list-outline' },
   { key: 'progress', title: 'Body progress', subtitle: 'Weight and measurements over time', icon: 'trending-up-outline' },
-  { key: 'gamification', title: 'XP, chests and leaderboards', subtitle: 'Levels, rewards and friendly competition', icon: 'trophy-outline' },
-  { key: 'guestPass', title: 'Guest pass', subtitle: 'Members bring a friend free for a week', icon: 'ticket-outline' },
+  { key: 'fitnessTest', title: 'Strength test', subtitle: 'A timed strength and endurance test with a score members can beat', icon: 'stopwatch-outline' },
+  { key: 'gamification', title: 'XP and leaderboards', subtitle: 'Levels, weekly leagues and friendly competition', icon: 'trophy-outline' },
+  {
+    key: 'chests',
+    title: 'Chests and prizes',
+    subtitle: 'Members win XP, free shakes, guest passes and pause days',
+    icon: 'gift-outline',
+    needs: { key: 'gamification', hint: 'Turn on XP and leaderboards first. Chests pay mostly in XP.' },
+  },
+  { key: 'pauses', title: 'Pausing', subtitle: 'Members can freeze their membership for travel or illness', icon: 'airplane-outline' },
+  { key: 'guestPass', title: 'Guest pass', subtitle: 'Members bring a friend free for a few days', icon: 'ticket-outline' },
+  { key: 'store', title: 'Shop', subtitle: 'Sell supplements and gear; members reserve in the app', icon: 'bag-handle-outline' },
   { key: 'referrals', title: 'Refer a friend', subtitle: 'Reward members who bring new joiners', icon: 'share-social-outline' },
   { key: 'nutrition', title: 'Diet and supplements', subtitle: 'Meal plans, water and supplement ticks', icon: 'restaurant-outline' },
   { key: 'mind', title: 'Breathing and calm', subtitle: 'Short guided sessions', icon: 'leaf-outline' },

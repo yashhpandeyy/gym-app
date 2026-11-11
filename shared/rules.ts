@@ -33,23 +33,37 @@ export function levelFor(total: number) {
   return { level, floor, next, into: total - floor, span: next - floor, progress: (total - floor) / (next - floor) };
 }
 
-const PRIZES: { weight: number; make: (r: () => number) => Prize }[] = [
+/**
+ * What a gym has switched on. Chests pay mostly in XP, so they can't run without it, and turning XP
+ * off takes them with it. Gyms that never chose count as on.
+ */
+export function rewardsOn(features: { gamification?: boolean; chests?: boolean }) {
+  const xp = features.gamification !== false;
+  return { xp, chests: xp && features.chests !== false };
+}
+
+const PRIZES: { weight: number; real?: boolean; make: (r: () => number) => Prize }[] = [
   { weight: 44, make: (r) => ({ kind: 'xp', amount: 10 + Math.round(r() * 15), label: 'XP' }) },
   { weight: 28, make: (r) => ({ kind: 'xp', amount: 30 + Math.round(r() * 30), label: 'XP' }) },
   { weight: 15, make: (r) => ({ kind: 'xp', amount: 80 + Math.round(r() * 70), label: 'XP' }) },
   { weight: 6, make: () => ({ kind: 'xp', amount: 250, label: 'XP jackpot' }) },
-  { weight: 4, make: () => ({ kind: 'shake', amount: 1, label: 'Free protein shake' }) },
-  { weight: 2, make: () => ({ kind: 'guestPass', amount: 1, label: 'Extra guest pass' }) },
-  { weight: 1, make: () => ({ kind: 'pauseDay', amount: 1, label: 'Extra pause day' }) },
+  { weight: 4, real: true, make: () => ({ kind: 'shake', amount: 1, label: 'Free protein shake' }) },
+  { weight: 2, real: true, make: () => ({ kind: 'guestPass', amount: 1, label: 'Extra guest pass' }) },
+  { weight: 1, real: true, make: () => ({ kind: 'pauseDay', amount: 1, label: 'Extra pause day' }) },
 ];
 
-/** The prize is drawn when the chest is opened, not when it's earned, so the size really is unknown. */
-export function drawPrize(random: () => number = Math.random): Prize {
-  const total = PRIZES.reduce((s, p) => s + p.weight, 0);
+/**
+ * The prize is drawn when the chest is opened, not when it's earned, so the size really is unknown.
+ * Chests a member earned on their own phone can't be verified by anyone, so `xpOnly` keeps them away
+ * from prizes that cost the gym something.
+ */
+export function drawPrize(random: () => number = Math.random, xpOnly = false): Prize {
+  const pool = xpOnly ? PRIZES.filter((p) => !p.real) : PRIZES;
+  const total = pool.reduce((s, p) => s + p.weight, 0);
   let roll = random() * total;
-  for (const p of PRIZES) {
+  for (const p of pool) {
     roll -= p.weight;
     if (roll <= 0) return p.make(random);
   }
-  return PRIZES[0].make(random);
+  return pool[0].make(random);
 }

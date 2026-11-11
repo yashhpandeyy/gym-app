@@ -26,7 +26,7 @@ import type {
   XpEvent,
 } from '@/store/types';
 
-import { drawPrize, levelFor, XP } from '../../shared/rules';
+import { drawPrize, levelFor, rewardsOn, XP } from '../../shared/rules';
 import { addDays, diffDays, startOfWeek, stampToDate, today, type ISODate } from './date';
 import { hash, rng } from './format';
 
@@ -52,9 +52,10 @@ export function xpBetween(xp: XpEvent[], memberId: string, from: ISODate, to: IS
 // Chests: variable reward magnitude
 // ---------------------------------------------------------------------------
 
-export const CHEST_TEASE = 'Anything from 10 XP to a 250 XP jackpot, a free shake or an extra pause day.';
+export const CHEST_TEASE = 'Anything from 10 XP to a 250 XP jackpot.';
+export const CHEST_TEASE_DESK = 'Anything from 10 XP to a 250 XP jackpot, a free shake or an extra pause day.';
 
-export { drawPrize };
+export { drawPrize, rewardsOn };
 
 /** Short code a member shows at the desk to collect a prize. Stable for the same chest. */
 export function prizeCode(chestId: string) {

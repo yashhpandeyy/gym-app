@@ -44,6 +44,14 @@ export default function PauseMembership() {
 
   if (!me || !info) return null;
 
+  if (brand.features.pauses === false && !done) {
+    return (
+      <Screen header="modal" title="Pause membership" footer={<Button title="Close" variant="outline" full onPress={() => router.back()} />}>
+        <Empty icon="airplane-outline" title="Pausing is off at this gym" body={`Talk to ${brand.shortName} at the desk if you need time away.`} />
+      </Screen>
+    );
+  }
+
   if (done) {
     return (
       <Screen header="modal" title={done.approved ? 'You’re paused' : 'Request sent'} footer={<Button title="Done" full onPress={() => router.back()} />}>

@@ -1,39 +1,49 @@
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { diffDays, fmtDate, fmtDay, plural, today } from '@/lib/date';
 import type { MembershipInfo } from '@/lib/domain';
-import { makeStyles, useTheme } from '@/theme';
+import { gutter, makeStyles, useTheme } from '@/theme';
 
-import { Logo, PlateRings } from './Brand';
-import { Sheen, Spin } from './fun/Effects';
+import { PlateDial } from './Brand';
 import { CountUp } from './fun/Motion';
-import { Button, PressableCard, ProgressBar, Text } from './ui';
+import { Button, PressableCard, Text } from './ui';
+
+/** The colour that carries the status: brand when active, ice when paused, ink when expired. */
+export function useMembershipLook(status: MembershipInfo['status']) {
+  const { c } = useTheme();
+  return {
+    active: { bg: c.primary, fg: c.onPrimary },
+    upcoming: { bg: c.primary, fg: c.onPrimary },
+    paused: { bg: c.ice.solid, fg: '#FFFFFF' },
+    expired: { bg: c.rail, fg: c.railInk },
+  }[status];
+}
 
 /**
- * The member's card. Its colour carries the status: brand colour when active,
- * ice when paused, ink when expired, so the state reads before any words do.
+ * The member's plate: the top of Home, edge to edge, in the gym's colour. Days left is the biggest
+ * thing in the app, and the dial beside it shows how much of the plan remains, so the state reads
+ * before any words do.
  */
 export function MembershipCard({
   info,
-  memberName,
+  head,
+  inset,
   onPress,
   onAction,
 }: {
   info: MembershipInfo;
-  memberName: string;
+  /** The row above the figure: greeting, gym, notifications. */
+  head?: ReactNode;
+  /** Inside a page rather than edge to edge at the top of one. */
+  inset?: boolean;
   onPress?: () => void;
   onAction?: () => void;
 }) {
-  const { c, brand, alpha } = useTheme();
+  const { alpha } = useTheme();
   const s = useStyles();
   const t = today();
-
-  const look = {
-    active: { bg: c.primary, fg: c.onPrimary },
-    upcoming: { bg: c.primary, fg: c.onPrimary },
-    paused: { bg: c.ice.solid, fg: '#FFFFFF' },
-    expired: { bg: c.ink, fg: c.surface },
-  }[info.status];
+  const look = useMembershipLook(info.status);
 
   let big: string;
   let line1: string;
@@ -70,86 +80,59 @@ export function MembershipCard({
       if (info.daysLeft <= 7) action = 'Renew now';
   }
 
+  const status = info.status === 'active' ? 'Active' : info.status === 'paused' ? 'Paused' : info.status === 'expired' ? 'Expired' : 'Starts soon';
+
   return (
-    <PressableCard onPress={onPress} accessibilityLabel={`Membership, ${big} ${line1}`} style={[s.card, { backgroundColor: look.bg, shadowColor: look.bg }]}>
-      <Spin seconds={90} style={{ position: 'absolute', right: -78, top: -70, width: 250, height: 250 }}>
-        <PlateRings size={250} color={alpha(look.fg, 0.1)} style={{ left: 0, top: 0 }} />
-      </Spin>
-      {info.status !== 'expired' ? <Sheen every={6000} delay={1200} opacity={0.22} /> : null}
-      <View style={s.top}>
-        <Logo size={28} inverted />
-        <Text variant="smallStrong" color={look.fg} numberOfLines={1} style={{ flex: 1 }}>
-          {brand.name}
-        </Text>
-        <View style={[s.status, { backgroundColor: alpha(look.fg, 0.16) }]}>
-          <View style={[s.dot, { backgroundColor: look.fg }]} />
-          <Text variant="micro" color={look.fg}>
-            {info.status === 'active' ? 'Active' : info.status === 'paused' ? 'Paused' : info.status === 'expired' ? 'Expired' : 'Starts soon'}
-          </Text>
+    <View style={[s.plate, inset && s.inset, { backgroundColor: look.bg }]}>
+      {head}
+      <PressableCard onPress={onPress} accessibilityLabel={`Membership, ${status}, ${big} ${line1}`} style={head ? s.body : null}>
+        <View style={s.reading}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {/^\d+$/.test(big) ? (
+              <CountUp value={Number(big)} from={0} duration={900} variant="hero" color={look.fg} />
+            ) : (
+              <Text variant="hero" color={look.fg} numberOfLines={1} adjustsFontSizeToFit>
+                {big}
+              </Text>
+            )}
+            <Text variant="bodyStrong" color={look.fg}>
+              {line1}
+            </Text>
+          </View>
+          <PlateDial size={112} value={info.status === 'active' ? 1 - info.progress : 0} color={look.fg} track={alpha(look.fg, 0.24)} />
         </View>
-      </View>
 
-      <View style={s.heroRow}>
-        {/^\d+$/.test(big) ? (
-          <CountUp value={Number(big)} from={0} duration={900} variant="hero" color={look.fg} />
-        ) : (
-          <Text variant={big.length > 4 ? 'display' : 'hero'} color={look.fg}>
-            {big}
+        <View style={s.foot}>
+          <Text variant="small" color={alpha(look.fg, 0.88)} style={{ flex: 1 }}>
+            {status}. {line2}
           </Text>
-        )}
-        <Text variant="bodyStrong" color={look.fg} style={s.heroLabel}>
-          {line1}
-        </Text>
-      </View>
-
-      {info.status === 'active' ? (
-        <ProgressBar value={info.progress} color={look.fg} track={alpha(look.fg, 0.22)} height={5} style={{ marginTop: 14 }} />
-      ) : null}
-
-      <View style={s.foot}>
-        <Text variant="small" color={alpha(look.fg, 0.86)} style={{ flex: 1 }}>
-          {line2}
-        </Text>
-        {info.status === 'active' && info.pauseAllowance > 0 ? (
-          <Text variant="small" color={alpha(look.fg, 0.86)}>
-            {plural(info.pauseLeft, 'pause day')} left
-          </Text>
-        ) : null}
-      </View>
+          {info.status === 'active' && info.pauseAllowance > 0 ? (
+            <Text variant="small" color={alpha(look.fg, 0.88)}>
+              {plural(info.pauseLeft, 'pause day')} left
+            </Text>
+          ) : null}
+        </View>
+      </PressableCard>
 
       {action && onAction ? (
-        <Button
-          title={action}
-          onPress={onAction}
-          variant="onPrimary"
-          size="md"
-          style={[s.action, { backgroundColor: look.fg }]}
-          accessibilityLabel={action}
-        />
+        <Button title={action} onPress={onAction} variant="onPrimary" size="md" full style={[s.action, { backgroundColor: look.fg }]} accessibilityLabel={action} />
       ) : null}
-      <Text variant="caption" color={alpha(look.fg, 0.7)} style={s.name} numberOfLines={1}>
-        {memberName}
-      </Text>
-    </PressableCard>
+    </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  card: {
-    borderRadius: t.radius.xl,
-    padding: 20,
-    paddingBottom: 18,
-    overflow: 'hidden',
-    shadowOpacity: t.scheme === 'dark' ? 0 : 0.28,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 12 },
+  plate: {
+    paddingHorizontal: gutter,
+    paddingTop: 8,
+    paddingBottom: 24,
+    borderBottomLeftRadius: t.radius.xl,
+    borderBottomRightRadius: t.radius.xl,
+    borderCurve: 'continuous',
   },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  status: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 26, borderRadius: 13 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  heroRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 22, flexWrap: 'wrap' },
-  heroLabel: { marginBottom: 12, flexShrink: 1 },
-  foot: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
-  action: { marginTop: 16 },
-  name: { marginTop: 14 },
+  inset: { borderRadius: t.radius.xl, paddingTop: 20, paddingBottom: 20, paddingHorizontal: 20 },
+  body: { marginTop: 20 },
+  reading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  foot: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 16 },
+  action: { marginTop: 14 },
 }));

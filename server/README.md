@@ -9,7 +9,7 @@ cd server
 npm install
 npm run db:local     # create the local D1 tables
 npm run dev          # http://127.0.0.1:8787, also reachable from a phone on the same Wi-Fi
-npm test             # 120+ end-to-end checks against the running server
+npm test             # 200+ end-to-end checks against the running server
 node scripts/make-admin.mjs you@gmail.com "Your Name" "a-strong-password"
 node test/seed-demo.mjs   # optional: a gym with realistic starter records, built through the real API
 ```
@@ -45,6 +45,25 @@ Then point the app at it with `EXPO_PUBLIC_API_URL` (in a `.env` file at the rep
 
 Owner sign-ups go live straight away. To review each new gym by hand before it works, set the Worker variable `SIGNUP_REVIEW` to `on`; new gyms then stay `pending` until an admin activates them.
 
+## Developer console
+
+The Worker serves a console for platform admins at `/admin` (for example `https://your-worker.workers.dev/admin`). It lists every gym, newest first, and flags new gyms and possible duplicates (same gym name, owner name or phone). Open a gym to:
+
+- see the owner, staff, members, profile and what the gym has set up
+- send the owner a **one-time reset link** (`/reset#...`, works once for 24 hours) so they pick their own password, or set one yourself
+- pause or switch the gym back on
+- download a backup (JSON, no password hashes)
+- delete the gym for good: you type the gym code back to confirm, and a backup downloads first
+
+Sign in with an admin account. To make one without the master token, run this from `server/` while logged in to Cloudflare (`npx wrangler login`). It prints a one-time setup link where you pick your own email and password:
+
+```bash
+node scripts/admin-link.mjs           # the live server
+node scripts/admin-link.mjs --local   # npm run dev
+```
+
+The script writes straight to D1, so only someone with access to the Cloudflare account can make an admin.
+
 ## Why it costs nothing
 
 | Need | Free tool | Limit that matters |
@@ -72,8 +91,11 @@ Everything the app keeps (plans, slots, members, bookings, check-ins, XP, workou
 The server also enforces what a phone can't be trusted with:
 
 - A slot's capacity, atomically, so two people can never take the last spot.
-- XP and chest limits per day, and amounts per award.
-- Chest prizes, which are drawn here with real randomness when the chest is opened.
+- The shape of every record a member writes, in `src/validate.ts`. Anything stored that doesn't fit is held back from phones, so one bad record can't crash someone else's app.
+- XP and chest limits per day, counted on the server's date, and amounts per award.
+- Chest prizes, which are drawn here with real randomness when the chest is opened. Chests earned on a member's own phone pay XP only; shakes, guest passes and pause days come only from chests the desk gives out.
+- Which rewards a gym has on. `features.gamification` covers XP and leaderboards, `features.chests` covers chests and prizes, and chests need XP on. Both default to on.
+- Pass keys, which sign a member's check-in QR. The server creates them, replaces them with each new login code, and never shows them to other members.
 - New members, who can only be created with an invite code, never through sync.
 - Medicines and supplement ticks, which are never accepted.
 

@@ -7,7 +7,7 @@ import { Confetti } from '@/components/fun/SkiaConfetti';
 import { CountUp, PopIn, Wiggle } from '@/components/fun/Motion';
 import { Button, Card, Empty, Group, Icon, Pill, Row, Screen, SectionHeader, Text, toast, type IconName } from '@/components/ui';
 import { fmtStamp, fmtStampInline } from '@/lib/date';
-import { CHEST_TEASE, prizeCode } from '@/lib/game';
+import { CHEST_TEASE, CHEST_TEASE_DESK, prizeCode, rewardsOn } from '@/lib/game';
 import { haptic } from '@/lib/native';
 import { openChestRemote } from '@/lib/remote';
 import { useApp, useMe, type Prize } from '@/store';
@@ -30,7 +30,8 @@ export default function Rewards() {
   const [opening, setOpening] = useState<{ id: string; prize: Prize | null; stage: 'shaking' | 'open' } | null>(null);
   if (!me) return null;
 
-  const closed = chests.filter((x) => x.memberId === me.id && !x.openedAt).sort((a, b) => (a.earnedAt < b.earnedAt ? -1 : 1));
+  const chestsOn = rewardsOn(brand.features).chests;
+  const closed = chestsOn ? chests.filter((x) => x.memberId === me.id && !x.openedAt).sort((a, b) => (a.earnedAt < b.earnedAt ? -1 : 1)) : [];
   const perks = chests
     .filter((x) => x.memberId === me.id && x.prize && x.prize.kind !== 'xp')
     .sort((a, b) => ((a.openedAt ?? '') < (b.openedAt ?? '') ? 1 : -1));
@@ -114,13 +115,13 @@ export default function Rewards() {
             </Wiggle>
           </Pressable>
           <Text variant="small" tone="soft" align="center">
-            Earned for: {next.reason.toLowerCase()}. {CHEST_TEASE}
+            Earned for: {next.reason.toLowerCase()}. {next.selfEarned ? CHEST_TEASE : CHEST_TEASE_DESK}
           </Text>
           <Button title="Tap to open" full onPress={() => open(next.id)} />
         </Card>
-      ) : (
+      ) : chestsOn ? (
         <Empty icon="gift-outline" title="No chests right now" body="You get a chest every day you check in, for personal records, and for closing all three rings." />
-      )}
+      ) : null}
 
       {perks.length ? (
         <>

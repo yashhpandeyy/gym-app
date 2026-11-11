@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { signOut } from '@/lib/remote';
@@ -6,6 +6,7 @@ import { syncNow, useSync } from '@/lib/sync';
 import { makeStyles, useTheme } from '@/theme';
 
 import { Logo } from './Brand';
+import { LaunchMark } from './Launch';
 import { Button, Text } from './ui';
 
 /**
@@ -22,17 +23,12 @@ export function SyncGate() {
 
   if (status === 'loading' || status === 'error') {
     return (
-      <View style={[StyleSheet.absoluteFill, s.cover, { backgroundColor: c.bg }]}>
-        <Logo size={64} />
+      <View style={[StyleSheet.absoluteFill, s.cover, { backgroundColor: status === 'loading' ? c.primary : c.bg }]}>
         {status === 'loading' ? (
-          <>
-            <ActivityIndicator color={c.primary} style={{ marginTop: 24 }} />
-            <Text tone="soft" style={{ marginTop: 12 }}>
-              Loading your gym
-            </Text>
-          </>
+          <LaunchMark />
         ) : (
           <>
+            <Logo size={64} />
             <Text variant="title" align="center" style={{ marginTop: 24 }}>
               Can’t open your gym
             </Text>

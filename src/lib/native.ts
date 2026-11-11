@@ -82,7 +82,16 @@ export function whatsapp(phone: string, text: string) {
   let digits = phone.replace(/\D/g, '');
   if (digits.length === 10) digits = `91${digits}`;
   const msg = encodeURIComponent(text);
+  // A browser can't tell whether the WhatsApp app link worked, so on the web go to wa.me, which opens WhatsApp Web or the desktop app.
+  if (Platform.OS === 'web') return open(`https://wa.me/${digits}?text=${msg}`);
   open(`whatsapp://send?phone=${digits}&text=${msg}`, `https://wa.me/${digits}?text=${msg}`);
+}
+
+/** Opens WhatsApp's own chooser so the person picks who to send the text to. */
+export function whatsappShare(text: string) {
+  const msg = encodeURIComponent(text);
+  if (Platform.OS === 'web') return open(`https://wa.me/?text=${msg}`);
+  open(`whatsapp://send?text=${msg}`, `https://wa.me/?text=${msg}`);
 }
 
 export function email(to: string, subject: string) {

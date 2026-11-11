@@ -1,9 +1,11 @@
 import { router } from 'expo-router';
-import { View } from 'react-native';
 
-import { Group, Row, Screen, SectionHeader, Segmented, Text } from '@/components/ui';
+import { AppVersion } from '@/components/AppVersion';
+import { Group, Row, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { plural } from '@/lib/date';
 import { money } from '@/lib/format';
+import { rewardsOn } from '@/lib/game';
+import { useIsOwner } from '@/lib/hooks';
 import { signOut } from '@/lib/remote';
 import { confirm } from '@/lib/native';
 import { useApp, type Prefs } from '@/store';
@@ -24,6 +26,9 @@ export default function More() {
   const challenges = useApp((s) => s.challenges);
   const prefs = useApp((s) => s.prefs);
   const setPrefs = useApp((s) => s.setPrefs);
+  const orders = useApp((s) => s.orders);
+  const owner = useIsOwner();
+  const waitingOrders = orders.filter((o) => o.status === 'requested').length;
 
   const pendingPauses = pauses.filter((p) => p.status === 'pending').length;
   const pendingCoach = ptRequests.filter((r) => r.status === 'pending').length;
@@ -62,12 +67,23 @@ export default function More() {
 
       <SectionHeader title="Business" />
       <Group>
+        {owner ? <Row icon="stats-chart-outline" title="Profit and loss" subtitle="Money in, money out, by month" onPress={() => router.push('/manage/books')} /> : null}
         <Row icon="wallet-outline" title="Payments and dues" value={dues ? `${money(dues)} due` : undefined} onPress={() => router.push('/manage/payments')} />
+        {brand.features.store !== false ? (
+          <Row icon="bag-handle-outline" title="Shop" value={waitingOrders ? `${waitingOrders} to hand over` : undefined} valueTone={waitingOrders ? 'warning' : 'soft'} onPress={() => router.push('/manage/store')} />
+        ) : null}
         <Row icon="pricetags-outline" title="Plans and prices" value={`${plans.filter((p) => p.active).length} live`} onPress={() => router.push('/manage/plans')} />
         {brand.features.leads ? (
           <Row icon="person-add-outline" title="Enquiries" value={newLeads ? `${newLeads} to follow up` : undefined} onPress={() => router.push('/manage/leads')} />
         ) : null}
         <Row icon="person-add" title="Add a member" onPress={() => router.push('/manage/add-member')} />
+      </Group>
+
+      <SectionHeader title="Staff" />
+      <Group>
+        <Row icon="checkbox-outline" title="Staff attendance" subtitle="Mark who was away today" onPress={() => router.push('/manage/attendance')} />
+        {owner ? <Row icon="cash-outline" title="Staff and salaries" subtitle="Pay worked out from attendance" onPress={() => router.push('/manage/payroll')} /> : null}
+        {owner ? <Row icon="key-outline" title="Staff logins" subtitle="Front-desk PINs" onPress={() => router.push('/manage/staff')} /> : null}
       </Group>
 
       <SectionHeader title="Engagement" />
@@ -78,7 +94,7 @@ export default function More() {
         {brand.features.gamification ? (
           <Row icon="stopwatch-outline" title="Station challenges" value={`${challenges.filter((c) => c.active).length} live`} onPress={() => router.push('/manage/challenges')} />
         ) : null}
-        {brand.features.gamification ? (
+        {rewardsOn(brand.features).chests ? (
           <Row
             icon="gift-outline"
             title="Prizes to hand out"
@@ -103,7 +119,6 @@ export default function More() {
         <Row icon="pricetag-outline" title="Plans and prices" onPress={() => router.push('/manage/plans')} />
         {brand.features.classes ? <Row icon="people-outline" title="Classes" subtitle="Yoga, Zumba and other timetabled sessions" onPress={() => router.push('/manage/classes')} /> : null}
         {brand.features.trainers ? <Row icon="barbell-outline" title="Coaches" subtitle="Who members can train with" onPress={() => router.push('/manage/trainers')} /> : null}
-        <Row icon="key-outline" title="Staff logins" subtitle="Front-desk PINs" onPress={() => router.push('/manage/staff')} />
       </Group>
 
       <SectionHeader title="Appearance" />
@@ -138,11 +153,7 @@ export default function More() {
           }
         />
       </Group>
-      <View style={{ marginTop: 18 }}>
-        <Text variant="caption" tone="faint" align="center">
-          {brand.name} manager app, version 1.0
-        </Text>
-      </View>
+      <AppVersion appName={`${brand.name} manager app`} />
     </Screen>
   );
 }
