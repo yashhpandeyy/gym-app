@@ -361,9 +361,20 @@ export default function Setup() {
 
       <SectionHeader title="What members get" hint="All on by default" />
       <Group>
-        {MODULES.map((m) => (
-          <ToggleRow key={m.key} icon={m.icon as IconName} title={m.title} subtitle={m.subtitle} value={features[m.key] !== false} onChange={(v) => toggle(m.key, v)} />
-        ))}
+        {MODULES.map((m) => {
+          const blocked = !!m.needs && features[m.needs.key] === false;
+          return (
+            <ToggleRow
+              key={m.key}
+              icon={m.icon as IconName}
+              title={m.title}
+              subtitle={blocked ? m.needs?.hint : m.subtitle}
+              value={!blocked && features[m.key] !== false}
+              disabled={blocked}
+              onChange={(v) => toggle(m.key, v)}
+            />
+          );
+        })}
       </Group>
     </Screen>
   );

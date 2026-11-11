@@ -24,7 +24,7 @@ import { useApp } from '@/store';
 import { makeStyles, useTheme } from '@/theme';
 
 export default function Membership() {
-  const { c } = useTheme();
+  const { c, brand } = useTheme();
   const s = useStyles();
   const now = useNow(60_000);
   const { member: me, info } = useMyMembership(now.date);
@@ -114,37 +114,41 @@ export default function Membership() {
         </Card>
       ) : null}
 
-      <SectionHeader
-        title="Pause your membership"
-        hint="Away for a while? Pause it and your end date moves forward by the same number of days."
-      />
-      <Card style={{ gap: 14 }}>
-        <View style={s.balance}>
-          <Text variant="display">{info.pauseLeft}</Text>
-          <Text variant="small" tone="soft" style={{ flex: 1, marginBottom: 8 }}>
-            of {info.pauseAllowance} pause days left this term
-          </Text>
-        </View>
-        <ProgressBar value={info.pauseAllowance ? info.pauseLeft / info.pauseAllowance : 0} color={c.ice.solid} />
-        <Text variant="caption" tone="soft">
-          Pauses need at least {plural(settings.minPauseDays, 'day')}
-          {settings.pauseNoticeDays ? ` and ${settings.pauseNoticeDays === 1 ? '1 day’s' : `${settings.pauseNoticeDays} days’`} notice` : ''}.
-          {settings.autoApprovePause ? ' They’re confirmed straight away.' : ' The gym confirms each request.'}
-        </Text>
-        <Button
-          title="Pause membership"
-          icon="airplane-outline"
-          variant="ink"
-          full
-          disabled={!canPause}
-          onPress={() => router.push('/member/pause')}
-        />
-        {!canPause && info.status !== 'expired' ? (
-          <Text variant="caption" tone="warning">
-            You don’t have enough pause days left this term. Renewing adds more.
-          </Text>
-        ) : null}
-      </Card>
+      {brand.features.pauses !== false ? (
+        <>
+          <SectionHeader
+            title="Pause your membership"
+            hint="Away for a while? Pause it and your end date moves forward by the same number of days."
+          />
+          <Card style={{ gap: 14 }}>
+            <View style={s.balance}>
+              <Text variant="display">{info.pauseLeft}</Text>
+              <Text variant="small" tone="soft" style={{ flex: 1, marginBottom: 8 }}>
+                of {info.pauseAllowance} pause days left this term
+              </Text>
+            </View>
+            <ProgressBar value={info.pauseAllowance ? info.pauseLeft / info.pauseAllowance : 0} color={c.ice.solid} />
+            <Text variant="caption" tone="soft">
+              Pauses need at least {plural(settings.minPauseDays, 'day')}
+              {settings.pauseNoticeDays ? ` and ${settings.pauseNoticeDays === 1 ? '1 day’s' : `${settings.pauseNoticeDays} days’`} notice` : ''}.
+              {settings.autoApprovePause ? ' They’re confirmed straight away.' : ' The gym confirms each request.'}
+            </Text>
+            <Button
+              title="Pause membership"
+              icon="airplane-outline"
+              variant="ink"
+              full
+              disabled={!canPause}
+              onPress={() => router.push('/member/pause')}
+            />
+            {!canPause && info.status !== 'expired' ? (
+              <Text variant="caption" tone="warning">
+                You don’t have enough pause days left this term. Renewing adds more.
+              </Text>
+            ) : null}
+          </Card>
+        </>
+      ) : null}
 
       <SectionHeader title="Your plan" action="Change plan" onAction={() => router.push('/member/renew')} />
       <Group inset={16}>

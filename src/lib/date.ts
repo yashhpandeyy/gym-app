@@ -110,6 +110,27 @@ export function fromMinutes(mins: number) {
   return `${pad(Math.floor(mins / 60) % 24)}:${pad(mins % 60)}`;
 }
 
+/**
+ * Reads a time typed the way people type it ('6', '6:30', '6.30', '0630', '6:30 pm', '18:30')
+ * as 'HH:MM', or null when it isn't a time. Without am or pm, the hour is on the 24-hour clock.
+ */
+export function parseClock(input: string): string | null {
+  const t = input.trim().toLowerCase().replace(/\s+/g, '').replace(/\.m\.?$/, 'm');
+  const m = /^(\d{1,2})(?:[:.](\d{2})|(\d{2}))?(am|pm|a|p)?$/.exec(t);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = Number(m[2] ?? m[3] ?? 0);
+  const ap = m[4];
+  if (min > 59) return null;
+  if (ap) {
+    if (h < 1 || h > 12) return null;
+    if (ap.startsWith('p') && h !== 12) h += 12;
+    if (ap.startsWith('a') && h === 12) h = 0;
+  }
+  if (h > 23) return null;
+  return `${pad(h)}:${pad(min)}`;
+}
+
 /** '18:30' → '6:30 pm' */
 export function fmtTime(hhmm: string) {
   const [h, m] = hhmm.split(':').map(Number);

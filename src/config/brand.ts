@@ -1,6 +1,20 @@
 import brandJson from './brand.json';
 
-export type FeatureKey = 'classes' | 'trainers' | 'progress' | 'workouts' | 'referrals' | 'leads' | 'gamification' | 'guestPass' | 'nutrition' | 'mind';
+export type FeatureKey =
+  | 'classes'
+  | 'trainers'
+  | 'progress'
+  | 'workouts'
+  | 'referrals'
+  | 'leads'
+  | 'gamification'
+  | 'chests'
+  | 'guestPass'
+  | 'nutrition'
+  | 'mind'
+  | 'pauses'
+  | 'store'
+  | 'fitnessTest';
 
 export type Hours = { label: string; days: number[]; open: string; close: string };
 

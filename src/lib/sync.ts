@@ -3,13 +3,14 @@ import { AppState as AppLifecycle } from 'react-native';
 import { create } from 'zustand';
 
 import { toast } from '@/components/ui/Toast';
+import { activeBrand } from '@/config/active';
 import { DEFAULT_SETTINGS, emptyData } from '@/data/empty';
 import { useApp, type AppState } from '@/store';
 import type { Celebration, CheckIn, Chest, SupplementItem } from '@/store/types';
 
 import { api, type PushResult, type SyncDoc, type SyncOp } from './api';
 import { brandFromGym } from './gymBrand';
-import { XP } from './game';
+import { rewardsOn, XP } from './game';
 import { uid } from './format';
 
 /**
@@ -44,17 +45,23 @@ const ARRAY_KINDS = [
   'challengeEntries',
   'guestPasses',
   'mindLog',
+  'testResults',
+  'products',
+  'orders',
+  'sales',
+  'team',
+  'ledger',
 ] as const;
 type ArrayKind = (typeof ARRAY_KINDS)[number];
 
-const RECORD_KINDS = ['progress', 'workouts', 'workoutLog', 'dietPlans', 'mealLog', 'water', 'leagueTier', 'leagueSettledWeek', 'ringClaims'] as const;
+const RECORD_KINDS = ['progress', 'workouts', 'workoutLog', 'dietPlans', 'mealLog', 'water', 'leagueTier', 'leagueSettledWeek', 'ringClaims', 'attendance'] as const;
 type RecordKind = (typeof RECORD_KINDS)[number];
 
 const isArrayKind = (k: string): k is ArrayKind => (ARRAY_KINDS as readonly string[]).includes(k);
 const isRecordKind = (k: string): k is RecordKind => (RECORD_KINDS as readonly string[]).includes(k);
 
 /** The gym's own setup goes first, so what depends on it (a booking needs its slot) is never refused for arriving early. */
-const PRIORITY = ['settings', 'plans', 'slots', 'classes', 'closures', 'trainers', 'challenges', 'announcements', 'members'];
+const PRIORITY = ['settings', 'plans', 'slots', 'classes', 'closures', 'trainers', 'challenges', 'products', 'announcements', 'members'];
 const rank = (kind: string) => {
   const i = PRIORITY.indexOf(kind);
   return i === -1 ? PRIORITY.length : i;
@@ -212,7 +219,7 @@ export function applyDocs(docs: SyncDoc[], opts: { force?: boolean } = {}) {
         kind: 'checkin',
         title: 'You’re in',
         body: gotChest ? 'You earned a chest, open it to see what’s inside.' : 'Have a great session.',
-        xp: XP.checkIn,
+        xp: rewardsOn(activeBrand().features).xp ? XP.checkIn : undefined,
         chest: gotChest,
       };
       patch.celebrations = [...s.celebrations, cel].slice(-12);
@@ -235,7 +242,7 @@ const REASONS: Record<string, string> = {
   too_large: 'That was too big to save.',
 };
 /** Quiet refusals: the app already limits these, so there's nothing useful to tell the person. */
-const SILENT = new Set(['daily_limit']);
+const SILENT = new Set(['daily_limit', 'feature_off']);
 
 function persistQueue() {
   AsyncStorage.setItem(QUEUE_KEY, JSON.stringify([...queue.values()])).catch(() => {});
@@ -323,6 +330,9 @@ async function refreshGym() {
   const next = brandFromGym(r.data.gym);
   const s = useApp.getState();
   if (JSON.stringify(next) !== JSON.stringify(s.brandOverride)) useApp.setState({ brandOverride: next });
+  // Pay and the books are the owner's. The server enforces it; this only decides what the screens offer.
+  const owner = r.data.role === 'owner';
+  if (s.session?.role === 'manager' && s.session.owner !== owner) useApp.setState({ session: { ...s.session, owner } });
   if (s.link && s.link.gymName !== r.data.gym.name) useApp.setState({ link: { ...s.link, gymName: r.data.gym.name } });
 }
 
@@ -429,6 +439,17 @@ export async function forgetSync() {
   mirror.clear();
   gymKey = '';
   await AsyncStorage.removeItem(QUEUE_KEY).catch(() => {});
+}
+
+/** Drops this phone's copy of the gym and reads it again, the way out when stored data can't be shown. */
+export async function resyncFromServer() {
+  const key = gymKey;
+  stopSync();
+  queue.clear();
+  mirror.clear();
+  await AsyncStorage.removeItem(QUEUE_KEY).catch(() => {});
+  useApp.setState({ ...emptyData(), syncCursor: 0, syncGym: '' });
+  if (key) await startSync(key);
 }
 
 export const currentSyncKey = () => gymKey;

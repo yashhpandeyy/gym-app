@@ -2,11 +2,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 
+import { MemberWelcome } from '@/components/auth/MemberWelcome';
 import { Logo, PlateRings } from '@/components/Brand';
 import { Button, Icon, Input, Text, type IconName } from '@/components/ui';
 import { SchemeToggle } from '@/components/web/WebShell';
 import { api, tokenStore, type FullGym } from '@/lib/api';
 import { brandFromGym } from '@/lib/gymBrand';
+import { isPhoneBrowser } from '@/lib/install';
 import { useApp } from '@/store';
 import { makeStyles, useTheme } from '@/theme';
 
@@ -18,8 +20,19 @@ const POINTS: { icon: IconName; title: string; body: string }[] = [
   { icon: 'time-outline', title: 'Slots and check-ins', body: 'Set your timetable, cap the crowd and check people in at the desk.' },
 ];
 
-/** The website's front door. Gym owners only: members use the mobile app. */
+/**
+ * The website's front door. On a phone it's the member sign-in, ready to install to the home screen;
+ * on a computer it's the owner dashboard. Each links to the other.
+ */
 export default function WebWelcome() {
+  const params = useLocalSearchParams<{ as?: string }>();
+  if (isPhoneBrowser() && params.as !== 'owner') {
+    return <MemberWelcome onOwner={(mode) => router.replace({ pathname: '/welcome', params: { as: 'owner', mode } })} />;
+  }
+  return <OwnerWelcome />;
+}
+
+function OwnerWelcome() {
   const { c, alpha } = useTheme();
   const s = useStyles();
   const { width } = useWindowDimensions();
@@ -169,9 +182,17 @@ export default function WebWelcome() {
             </Pressable>
           </View>
 
-          <Text variant="caption" tone="faint">
-            Members sign in on the mobile app, not on this site.
-          </Text>
+          {isPhoneBrowser() ? (
+            <Pressable accessibilityRole="link" onPress={() => router.replace('/welcome')} style={{ cursor: 'pointer' }}>
+              <Text variant="smallStrong" tone="primary">
+                Member? Sign in with your number and code
+              </Text>
+            </Pressable>
+          ) : (
+            <Text variant="caption" tone="faint">
+              Members: open this site on your phone to sign in and install the app.
+            </Text>
+          )}
         </View>
       </ScrollView>
     </View>

@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { Button, Card, CodeInput, Input, Screen, Text } from '@/components/ui';
+import { useUpdateReady } from '@/lib/updates';
 import { api, tokenStore, type PublicGym } from '@/lib/api';
 import { brandFromGym } from '@/lib/gymBrand';
 import { useApp } from '@/store';
@@ -16,6 +17,7 @@ export default function Join() {
   const { c } = useTheme();
   const s = useStyles();
   const joinRemote = useApp((st) => st.joinRemote);
+  const updated = useUpdateReady((st) => st.ready);
   const setBrandOverride = useApp((st) => st.setBrandOverride);
 
   const [step, setStep] = useState<Step>('code');
@@ -191,7 +193,7 @@ export default function Join() {
                 {error}
               </Text>
             ) : null}
-            <Button title="Join" full loading={busy} disabled={phone.length < 10 || invite.length < 6} onPress={redeem} />
+            <Button title="Join" tag={updated ? 'Updated' : undefined} full loading={busy} disabled={phone.length < 10 || invite.length < 6} onPress={redeem} />
           </>
         ) : null}
 
@@ -247,7 +249,7 @@ export default function Join() {
                 {error}
               </Text>
             ) : null}
-            <Button title="Sign in" full loading={busy} disabled={phone.length < 10 || secret.length < 4} onPress={staffLogin} />
+            <Button title="Sign in" tag={updated ? 'Updated' : undefined} full loading={busy} disabled={phone.length < 10 || secret.length < 4} onPress={staffLogin} />
           </>
         ) : null}
       </View>

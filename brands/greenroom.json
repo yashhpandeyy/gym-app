@@ -70,9 +70,13 @@
     "referrals": true,
     "leads": true,
     "gamification": true,
+    "chests": true,
     "guestPass": true,
     "nutrition": true,
-    "mind": true
+    "mind": true,
+    "pauses": true,
+    "store": true,
+    "fitnessTest": true
   },
   "referral": {
     "reward": "Your friend's first week is free and you get 10 extra days."

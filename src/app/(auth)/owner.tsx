@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button, Input, Screen, Segmented, Text } from '@/components/ui';
+import { useUpdateReady } from '@/lib/updates';
 import { api, tokenStore, type FullGym } from '@/lib/api';
 import { brandFromGym } from '@/lib/gymBrand';
 import { useApp } from '@/store';
@@ -12,6 +13,7 @@ type Mode = 'create' | 'signin';
 /** For gym owners: create your gym in the app, or come back to it with your email. */
 export default function Owner() {
   const joinRemote = useApp((st) => st.joinRemote);
+  const updated = useUpdateReady((st) => st.ready);
   const joinAdmin = useApp((st) => st.joinAdmin);
   const params = useLocalSearchParams<{ mode?: string }>();
   const [mode, setMode] = useState<Mode>(params.mode === 'signin' ? 'signin' : 'create');
@@ -96,7 +98,7 @@ export default function Owner() {
             {error}
           </Text>
         ) : null}
-        <Button title={mode === 'create' ? 'Create my gym' : 'Sign in'} full loading={busy} disabled={!ready} onPress={mode === 'create' ? create : signIn} />
+        <Button title={mode === 'create' ? 'Create my gym' : 'Sign in'} tag={updated ? 'Updated' : undefined} full loading={busy} disabled={!ready} onPress={mode === 'create' ? create : signIn} />
         {mode === 'create' ? (
           <Text variant="small" tone="soft">
             Your gym goes live straight away. Add members from the app and each one gets a code to sign in with.

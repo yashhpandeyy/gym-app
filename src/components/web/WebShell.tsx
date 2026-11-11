@@ -4,6 +4,8 @@ import { Platform, Pressable, ScrollView, useWindowDimensions, View } from 'reac
 
 import { Logo } from '@/components/Brand';
 import { Icon, Text, type IconName } from '@/components/ui';
+import { rewardsOn } from '@/lib/game';
+import { useIsOwner } from '@/lib/hooks';
 import { signOut } from '@/lib/remote';
 import { useApp } from '@/store';
 import { makeStyles, useTheme } from '@/theme';
@@ -44,7 +46,10 @@ function Sidebar() {
   const ptRequests = useApp((st) => st.ptRequests);
   const tickets = useApp((st) => st.tickets);
   const leads = useApp((st) => st.leads);
+  const orders = useApp((st) => st.orders);
+  const owner = useIsOwner();
   const f = brand.features;
+  const reserved = orders.filter((o) => o.status === 'requested').length;
 
   const requests = pauses.filter((p) => p.status === 'pending').length + (f.trainers ? ptRequests.filter((r) => r.status === 'pending').length : 0);
   const open = tickets.filter((t) => t.status === 'open').length;
@@ -70,11 +75,24 @@ function Sidebar() {
     {
       title: 'Business',
       items: [
+        ...(owner ? [{ label: 'Profit and loss', icon: 'stats-chart-outline' as const, path: '/manage/books' }] : []),
         { label: 'Payments', icon: 'wallet-outline', path: '/manage/payments' },
+        ...(f.store !== false ? [{ label: 'Shop', icon: 'bag-handle-outline' as const, path: '/manage/store', badge: reserved }] : []),
         { label: 'Plans and prices', icon: 'pricetags-outline', path: '/manage/plans' },
         ...(f.classes ? [{ label: 'Classes', icon: 'calendar-outline' as const, path: '/manage/classes' }] : []),
         ...(f.trainers ? [{ label: 'Coaches', icon: 'barbell-outline' as const, path: '/manage/trainers' }] : []),
-        { label: 'Staff logins', icon: 'key-outline', path: '/manage/staff' },
+      ],
+    },
+    {
+      title: 'Staff',
+      items: [
+        { label: 'Attendance', icon: 'checkbox-outline', path: '/manage/attendance' },
+        ...(owner
+          ? [
+              { label: 'Salaries', icon: 'cash-outline' as const, path: '/manage/payroll' },
+              { label: 'Staff logins', icon: 'key-outline' as const, path: '/manage/staff' },
+            ]
+          : []),
       ],
     },
     {
@@ -82,12 +100,8 @@ function Sidebar() {
       items: [
         { label: 'Announcements', icon: 'megaphone-outline', path: '/manage/announcements' },
         ...(f.guestPass ? [{ label: 'Guest passes', icon: 'ticket-outline' as const, path: '/manage/guests' }] : []),
-        ...(f.gamification
-          ? [
-              { label: 'Station challenges', icon: 'stopwatch-outline' as const, path: '/manage/challenges' },
-              { label: 'Prizes', icon: 'gift-outline' as const, path: '/manage/prizes' },
-            ]
-          : []),
+        ...(f.gamification ? [{ label: 'Station challenges', icon: 'stopwatch-outline' as const, path: '/manage/challenges' }] : []),
+        ...(rewardsOn(f).chests ? [{ label: 'Prizes', icon: 'gift-outline' as const, path: '/manage/prizes' }] : []),
       ],
     },
     {

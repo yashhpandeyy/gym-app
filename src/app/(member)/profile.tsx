@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { View } from 'react-native';
 
+import { AppVersion } from '@/components/AppVersion';
 import {
   Avatar,
   Card,
@@ -14,6 +15,7 @@ import {
   ToggleRow,
 } from '@/components/ui';
 import { fmtMonthYear } from '@/lib/date';
+import { rewardsOn } from '@/lib/game';
 import { isPausedOn, visitStats } from '@/lib/domain';
 import { useMyMembership, useNow } from '@/lib/hooks';
 import { confirm } from '@/lib/native';
@@ -30,6 +32,7 @@ export default function Profile() {
   const pauses = useApp((st) => st.pauses);
   const prefs = useApp((st) => st.prefs);
   const setPrefs = useApp((st) => st.setPrefs);
+  const shopOpen = useApp((st) => st.products.some((p) => p.active));
 
   if (!me || !info) return null;
   const stats = visitStats(checkins, me.id, me.weeklyGoal, now.date, (d) => isPausedOn(me.id, d, pauses));
@@ -54,9 +57,12 @@ export default function Profile() {
       </Card>
 
       <Group style={{ marginTop: 14 }}>
-        <Row icon="card-outline" title="Membership" subtitle="Plan, pause, renew and payments" onPress={() => router.push('/member/membership')} />
+        <Row icon="card-outline" title="Membership" subtitle={brand.features.pauses !== false ? 'Plan, pause, renew and payments' : 'Plan, renew and payments'} onPress={() => router.push('/member/membership')} />
+        {brand.features.store !== false && shopOpen ? (
+          <Row icon="bag-handle-outline" title="Shop" subtitle="Supplements and gear, collect at the desk" onPress={() => router.push('/member/store')} />
+        ) : null}
         {brand.features.gamification ? (
-          <Row icon="gift-outline" title="Rewards" subtitle="Chests, prizes and your XP" onPress={() => router.push('/member/rewards')} />
+          <Row icon="gift-outline" title="Rewards" subtitle={rewardsOn(brand.features).chests ? 'Chests, prizes and your XP' : 'Your XP and prizes won'} onPress={() => router.push('/member/rewards')} />
         ) : null}
       </Group>
 
@@ -69,9 +75,13 @@ export default function Profile() {
         {brand.features.workouts ? (
           <Row icon="list-outline" title="Workout plan" subtitle="From your coach" onPress={() => router.push('/member/workout')} />
         ) : null}
+        {brand.features.fitnessTest !== false ? (
+          <Row icon="stopwatch-outline" title="Strength test" subtitle="Timed test with a score to beat" onPress={() => router.push('/member/fitness-test')} />
+        ) : null}
         {brand.features.gamification ? (
           <Row icon="barbell-outline" title="Strength score" subtitle="Your lifts against your bodyweight" onPress={() => router.push('/member/strength')} />
         ) : null}
+        <Row icon="alarm-outline" title="Alarms" subtitle="Gym time, medicines and meals" onPress={() => router.push('/member/alarms')} />
       </Group>
 
       {brand.features.nutrition || brand.features.mind ? (
@@ -173,9 +183,7 @@ export default function Profile() {
           }
         />
       </Group>
-      <Text variant="caption" tone="faint" align="center" style={{ marginTop: 18 }}>
-        {brand.name} app, version 1.0
-      </Text>
+      <AppVersion appName={`${brand.name} app`} />
     </Screen>
   );
 }

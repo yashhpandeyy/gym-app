@@ -1,15 +1,19 @@
 import { BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
 import { Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from '@expo-google-fonts/figtree';
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, ThemeProvider as NavigationTheme, Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavigationTheme, Stack, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useMemo } from 'react';
 
+import { AlarmHost } from '@/components/AlarmHost';
+import { CrashScreen } from '@/components/CrashScreen';
+import { InstallBanner } from '@/components/InstallApp';
 import { Launch } from '@/components/Launch';
 import { CelebrationHost } from '@/components/fun/Celebration';
 import { SyncGate } from '@/components/SyncGate';
+import { UpdateWatcher } from '@/components/UpdateWatcher';
 import { WebShell } from '@/components/web/WebShell';
 import { ToastHost } from '@/components/ui';
 import '@/lib/remote';
@@ -40,10 +44,18 @@ const MEMBER_SCREENS = [
   'supplements',
   'mind',
   'leaderboards',
+  'store',
+  'fitness-test',
+  'test-run',
+  'alarms',
 ];
 const MEMBER_MODALS = ['pause', 'renew', 'edit-profile', 'breathe/[id]'];
-const MANAGER_SCREENS = ['member/[id]', 'requests', 'payments', 'plans', 'leads', 'announcements', 'tickets', 'settings', 'challenges', 'prizes', 'guests', 'classes', 'trainers', 'staff'];
+const MANAGER_SCREENS = ['member/[id]', 'requests', 'payments', 'plans', 'leads', 'announcements', 'tickets', 'settings', 'challenges', 'prizes', 'guests', 'classes', 'trainers', 'staff', 'store', 'attendance', 'payroll', 'books', 'fitness-test', 'test-run'];
 const MANAGER_MODALS = ['add-member'];
+
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <CrashScreen {...props} />;
+}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -153,6 +165,9 @@ function RootNavigator() {
       </WebShell>
       <CelebrationHost />
       <SyncGate />
+      <AlarmHost />
+      <UpdateWatcher />
+      {session ? <InstallBanner /> : null}
       <ToastHost />
       <Launch />
     </NavigationTheme>

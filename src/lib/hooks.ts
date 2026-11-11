@@ -15,6 +15,11 @@ export function useNow(intervalMs = 30_000) {
   return { date: toISO(now), mins: now.getHours() * 60 + now.getMinutes(), hour: now.getHours() };
 }
 
+/** Whether the person signed in is the gym's owner, who alone sees pay and the books. Front-desk staff aren't. */
+export function useIsOwner() {
+  return useApp((s) => s.session?.role === 'manager' && s.session.owner === true);
+}
+
 /** The slices most domain helpers need, selected one by one so references stay stable. */
 export function useGym() {
   const slots = useApp((s) => s.slots);

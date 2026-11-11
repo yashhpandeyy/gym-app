@@ -216,6 +216,18 @@ export const emailOf = (v: unknown) => {
   return e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e) ? e : null;
 };
 
+/**
+ * What a platform admin signs in with: an email, or a username of 3 to 40 letters, digits, dots,
+ * dashes or underscores. Either way it lives in admins.email. A username has no @, so it can never
+ * be mistaken for an owner's email.
+ */
+export const adminLoginOf = (v: unknown) => {
+  const email = emailOf(v);
+  if (email) return email;
+  const u = typeof v === 'string' ? v.trim().toLowerCase() : '';
+  return /^[a-z0-9][a-z0-9._-]{2,39}$/.test(u) ? u : null;
+};
+
 export const emailTaken = (db: D1Database, email: string) => db.prepare("SELECT 1 AS x FROM users WHERE role = 'owner' AND lower(email) = ?").bind(email).first();
 
 export function signupFields(b: Record<string, unknown>) {

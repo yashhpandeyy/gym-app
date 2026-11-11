@@ -1,0 +1,35 @@
+{
+  "savedAt": "2026-10-30T13:15:28.061Z",
+  "selection": {
+    "tap": {
+      "id": "none",
+      "label": "None (silent)",
+      "file": null
+    },
+    "success": {
+      "id": "bell",
+      "label": "Bell ding",
+      "file": "sounds/success-bell.wav"
+    },
+    "warn": {
+      "id": "knock-knock",
+      "label": "Knock knock",
+      "file": "sounds/warn-knock-knock.wav"
+    },
+    "pop": {
+      "id": "tick-soft",
+      "label": "Soft tick",
+      "file": "sounds/pop-tick-soft.wav"
+    },
+    "flip": {
+      "id": "coin-flip",
+      "label": "Coin flip",
+      "file": "sounds/flip-coin-flip.wav"
+    },
+    "heavy": {
+      "id": "chest-knock",
+      "label": "Chest knock",
+      "file": "sounds/heavy-chest-knock.wav"
+    }
+  }
+}

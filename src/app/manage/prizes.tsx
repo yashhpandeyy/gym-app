@@ -2,7 +2,7 @@ import { View } from 'react-native';
 
 import { Avatar, Button, Card, Empty, Group, Row, Screen, SectionHeader, Text, toast } from '@/components/ui';
 import { fmtStamp, fmtStampInline } from '@/lib/date';
-import { CHEST_TEASE, prizeCode } from '@/lib/game';
+import { CHEST_TEASE_DESK, prizeCode } from '@/lib/game';
 import { useApp } from '@/store';
 
 export default function Prizes() {
@@ -58,8 +58,8 @@ export default function Prizes() {
 
       <SectionHeader title="What’s in a chest" />
       <Text variant="small" tone="soft">
-        {CHEST_TEASE} Members get one for each day they check in, each personal record, and for closing all three weekly rings. Real prizes are rare by
-        design, about 1 chest in 14.
+        {CHEST_TEASE_DESK} Members get one for each day they check in, each personal record, and for closing all three weekly rings. Real prizes only come
+        from chests your desk gives out, at check-in or for a referral, about 1 chest in 14. Chests earned in the app pay XP.
       </Text>
     </Screen>
   );

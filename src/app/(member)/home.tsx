@@ -71,6 +71,7 @@ export default function Home() {
   const prefs = useApp((st) => st.prefs);
   const notices = useApp((st) => st.notices);
   const endPauseEarly = useApp((st) => st.endPauseEarly);
+  const shopOpen = useApp((st) => st.products.some((p) => p.active));
   const look = useMembershipLook(info?.status ?? 'active');
 
   // The plate runs under the status bar, so the clock and battery follow its colour while Home is showing.
@@ -123,10 +124,11 @@ export default function Home() {
   };
 
   const quick: { icon: IconName; label: string; href: Parameters<typeof router.push>[0]; show: boolean }[] = [
+    { icon: 'bag-handle-outline', label: 'Shop', href: '/member/store', show: brand.features.store !== false && shopOpen },
     { icon: 'ticket-outline', label: 'Guest pass', href: '/member/guest', show: brand.features.guestPass && info.status === 'active' },
     { icon: 'restaurant-outline', label: 'Diet', href: '/member/diet', show: brand.features.nutrition },
     { icon: 'leaf-outline', label: 'Breathe', href: '/member/mind', show: brand.features.mind },
-    { icon: 'airplane-outline', label: 'Pause', href: '/member/pause', show: info.status !== 'expired' },
+    { icon: 'airplane-outline', label: 'Pause', href: '/member/pause', show: brand.features.pauses !== false && info.status !== 'expired' },
     { icon: 'list-outline', label: 'My plan', href: '/member/workout', show: brand.features.workouts },
     { icon: 'barbell-outline', label: 'Coaches', href: '/member/trainers', show: brand.features.trainers },
   ];

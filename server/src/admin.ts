@@ -5,7 +5,7 @@ import {
   adminToken,
   blocked,
   body,
-  emailOf,
+  adminLoginOf,
   emailTaken,
   fail,
   fullGym,
@@ -227,10 +227,10 @@ export function registerAdmin(app: Hono<AppEnv>) {
     const key = `link-ip:${ip(c)}`;
     if (await blocked(db, key, 30, 900)) return fail(c, 429, 'too_many', 'Too many tries. Wait 15 minutes.');
     const b = await body(c);
-    const email = emailOf(b.email);
+    const email = adminLoginOf(b.email);
     const name = text(b.name, 2, 60);
     const password = passwordOf(b.password);
-    if (!email || !name || !password) return fail(c, 400, 'invalid', 'Enter your name, a valid email and a password of 8 or more characters.');
+    if (!email || !name || !password) return fail(c, 400, 'invalid', 'Enter your name, an email or a username (3 to 40 letters, digits, dots, dashes or underscores), and a password of 8 or more characters.');
     const invite = await inviteFor(db, b.token);
     if (!invite) {
       await recordFail(db, key, 900);

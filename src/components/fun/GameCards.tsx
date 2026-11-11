@@ -4,7 +4,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Avatar, Card, Icon, Text } from '@/components/ui';
 import type { Ring } from '@/lib/game';
-import { PROMOTE } from '@/lib/game';
+import { PROMOTE, rewardsOn } from '@/lib/game';
 import type { GameState } from '@/lib/useGame';
 import type { Member, RingKey } from '@/store/types';
 import { makeStyles, useTheme, type Palette } from '@/theme';
@@ -18,7 +18,8 @@ export function ringColor(c: Palette, key: RingKey) {
 }
 
 export function RingsCard({ rings, compact }: { rings: Ring[]; compact?: boolean }) {
-  const { c } = useTheme();
+  const { c, brand } = useTheme();
+  const chestsOn = rewardsOn(brand.features).chests;
   const s = useStyles();
   const closed = rings.filter((r) => r.value >= r.target).length;
   return (
@@ -43,7 +44,7 @@ export function RingsCard({ rings, compact }: { rings: Ring[]; compact?: boolean
         })}
         {!compact ? (
           <Text variant="caption" tone={closed === 3 ? 'success' : 'faint'}>
-            {closed === 3 ? 'All closed this week. Bonus chest earned.' : 'Close all three by Sunday for a bonus chest.'}
+            {closed === 3 ? `All closed this week.${chestsOn ? ' Bonus chest earned.' : ''}` : `Close all three by Sunday${chestsOn ? ' for a bonus chest' : ''}.`}
           </Text>
         ) : null}
       </View>

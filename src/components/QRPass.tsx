@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -11,8 +11,8 @@ import { Ring, Text } from './ui';
 const WINDOW = 30;
 
 /**
- * A pass that re-draws every 30 seconds. The desk scanner rejects codes older than about
- * a minute, so a screenshot shared with a friend stops working almost immediately.
+ * A pass that re-draws every 30 seconds and is signed with the member's own key. The desk scanner
+ * rejects codes older than a couple of minutes, and nobody can work out the next one from a photo.
  */
 export function QRPass({ member, size = 220, disabled }: { member: Member; size?: number; disabled?: boolean }) {
   const { c } = useTheme();
@@ -24,7 +24,16 @@ export function QRPass({ member, size = 220, disabled }: { member: Member; size?
   }, []);
 
   const secondsLeft = WINDOW - (Math.floor(now / 1000) % WINDOW);
-  const value = memberQRValue(member, WINDOW, now);
+  const window = Math.floor(now / (WINDOW * 1000));
+  const value = useMemo(() => memberQRValue(member, WINDOW, window * WINDOW * 1000), [member, window]);
+
+  if (!value) {
+    return (
+      <Text variant="small" tone="soft" align="center">
+        Your pass needs a moment online to get ready. Connect to the internet and keep this screen open.
+      </Text>
+    );
+  }
 
   return (
     <View style={{ alignItems: 'center', gap: 16 }}>

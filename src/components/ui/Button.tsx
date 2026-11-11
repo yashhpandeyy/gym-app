@@ -22,6 +22,7 @@ export function Button({
   full,
   style,
   accessibilityLabel,
+  tag,
 }: {
   title: string;
   onPress?: () => void;
@@ -34,6 +35,8 @@ export function Button({
   full?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  /** A small label inside the button after the title, like "Updated". */
+  tag?: string;
 }) {
   const { c, radius, alpha } = useTheme();
   const s = useStyles();
@@ -63,7 +66,7 @@ export function Button({
     <Animated.View style={[{ height: dims.height, alignSelf: full ? 'stretch' : 'flex-start' }, outer, disabled && s.disabled, popStyle]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel ?? title}
+        accessibilityLabel={accessibilityLabel ?? (tag ? `${title}, ${tag}` : title)}
         accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
         disabled={disabled || loading}
         onPressIn={() => {
@@ -99,6 +102,14 @@ export function Button({
             <Text variant={dims.text} color={p.fg} numberOfLines={1}>
               {title}
             </Text>
+            {tag ? (
+              <View style={[s.tag, { backgroundColor: alpha(p.fg, 0.16) }]}>
+                <Icon name="sparkles" size={11} color={p.fg} />
+                <Text variant="caption" color={p.fg} numberOfLines={1}>
+                  {tag}
+                </Text>
+              </View>
+            ) : null}
             {iconRight ? <Icon name={iconRight} size={dims.icon} color={p.fg} /> : null}
           </>
         )}
@@ -196,6 +207,7 @@ const useStyles = makeStyles((t) => ({
   },
   pressed: { opacity: 0.86, transform: [{ scale: 0.985 }] },
   disabled: { opacity: 0.42 },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
   iconBtn: { alignItems: 'center', justifyContent: 'center' },
   badge: {
     position: 'absolute',

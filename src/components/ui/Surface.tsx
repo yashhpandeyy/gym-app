@@ -125,12 +125,14 @@ export function ToggleRow({
   subtitle,
   value,
   onChange,
+  disabled,
 }: {
   icon?: IconName;
   title: string;
   subtitle?: string;
   value: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   const { c } = useTheme();
   return (
@@ -142,6 +144,7 @@ export function ToggleRow({
       right={
         <Switch
           value={value}
+          disabled={disabled}
           onValueChange={(v) => {
             haptic.tap();
             onChange(v);

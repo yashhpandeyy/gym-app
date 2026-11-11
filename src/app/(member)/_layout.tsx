@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router/js-tabs';
 
 import { TabBar, type TabItem } from '@/components/TabBar';
+import { rewardsOn } from '@/lib/game';
 import { useApp } from '@/store';
 import { useTheme } from '@/theme';
 
@@ -12,7 +13,7 @@ export default function MemberTabs() {
     home: { label: 'Home', icon: 'home-outline', iconActive: 'home' },
     book: { label: 'Book', icon: 'calendar-outline', iconActive: 'calendar' },
     pass: { label: 'Pass', icon: 'qr-code-outline', iconActive: 'qr-code', center: true },
-    ...(brand.features.gamification ? { club: { label: 'Club', icon: 'trophy-outline', iconActive: 'trophy', badge: chests } as TabItem } : {}),
+    ...(brand.features.gamification ? { club: { label: 'Club', icon: 'trophy-outline', iconActive: 'trophy', badge: rewardsOn(brand.features).chests ? chests : 0 } as TabItem } : {}),
     profile: { label: 'You', icon: 'person-circle-outline', iconActive: 'person-circle' },
   };
   return (

@@ -4,7 +4,7 @@ import { Pressable, View } from 'react-native';
 
 import { DateCalendar } from '@/components/Calendar';
 import { Button, Card, Chip, Empty, Input, Screen, SectionHeader, Sheet, Text } from '@/components/ui';
-import { addDays, addMonths, fmtDate, termEnd, type ISODate } from '@/lib/date';
+import { addDays, addMonths, diffDays, fmtDate, fmtDay, plural, termEnd, type ISODate } from '@/lib/date';
 import { money } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import { haptic, share, whatsapp } from '@/lib/native';
@@ -26,7 +26,10 @@ export default function AddMember() {
   const [gender, setGender] = useState<Gender>('female');
   const [planId, setPlanId] = useState(plans.find((p) => p.popular)?.id ?? plans[0]?.id);
   const [start, setStart] = useState<ISODate>(now.date);
-  const [picking, setPicking] = useState(false);
+  // Members who joined long ago: their first day at the gym, when it's earlier than this plan's start.
+  const [since, setSince] = useState<ISODate | null>(null);
+  const [paidToday, setPaidToday] = useState(false);
+  const [picking, setPicking] = useState<'start' | 'since' | null>(null);
   const [paid, setPaid] = useState(String(plans.find((p) => p.id === planId)?.price ?? ''));
   const [method, setMethod] = useState<PayMethod>('UPI');
   const [errors, setErrors] = useState<{ name?: string; phone?: string; email?: string; form?: string }>({});
@@ -51,6 +54,12 @@ export default function AddMember() {
 
   const amount = parseInt(paid, 10) || 0;
   const due = Math.max(0, plan.price - amount);
+  const end = termEnd(start, plan.months);
+  const past = start < now.date;
+  // Someone entered after the fact paid when they joined, so the money counts in that month's books.
+  const paidOn = past && !paidToday ? start : now.date;
+  const joinedOn = since && since < start ? since : start;
+  const earliest = addMonths(now.date, -12 * 30);
 
   const save = async () => {
     const digits = phone.replace(/\D/g, '').slice(-10);
@@ -61,7 +70,7 @@ export default function AddMember() {
     setErrors(e);
     if (e.name || e.phone || e.email) return;
     setBusy(true);
-    const r = await createMember({ name, phone: digits, email, gender, planId: plan.id, startDate: start, paid: amount, method, leadId: params.leadId });
+    const r = await createMember({ name, phone: digits, email, gender, planId: plan.id, startDate: start, joinedOn, paid: amount, paidOn, method, leadId: params.leadId });
     setBusy(false);
     if (!r.ok) return setErrors({ form: r.message });
     haptic.success();
@@ -108,7 +117,7 @@ export default function AddMember() {
         <>
           <View style={s.total}>
             <Text variant="small" tone="soft" style={{ flex: 1 }}>
-              {plan.name} until {fmtDate(termEnd(start, plan.months))}
+              {plan.name}, {fmtDate(start)} to {fmtDate(end)}
             </Text>
             <Text variant="label" tone={due ? 'danger' : 'success'}>
               {due ? `${money(due)} left to pay` : 'Paid in full'}
@@ -162,7 +171,7 @@ export default function AddMember() {
         })}
       </View>
 
-      <SectionHeader title="Starts" />
+      <SectionHeader title="Plan starts" hint="Adding someone who already trains here? Pick the day their current plan started, any month or year." />
       <View style={s.wrap}>
         <Chip label="Today" selected={start === now.date} onPress={() => setStart(now.date)} />
         <Chip label="Tomorrow" selected={start === addDays(now.date, 1)} onPress={() => setStart(addDays(now.date, 1))} />
@@ -170,7 +179,33 @@ export default function AddMember() {
           label={start !== now.date && start !== addDays(now.date, 1) ? fmtDate(start) : 'Pick a date'}
           icon="calendar-outline"
           selected={start !== now.date && start !== addDays(now.date, 1)}
-          onPress={() => setPicking(true)}
+          onPress={() => setPicking('start')}
+        />
+      </View>
+      {past ? (
+        <Card variant="soft" style={{ marginTop: 10, gap: 2 }}>
+          <Text variant="label">
+            {end < now.date ? `This plan ended on ${fmtDate(end)}` : `${plural(diffDays(now.date, end) + 1, 'day')} left on this plan`}
+          </Text>
+          <Text variant="small" tone="soft">
+            {end < now.date
+              ? 'They’ll show as expired until you renew them.'
+              : `It runs ${fmtDate(start)} to ${fmtDate(end)}. Attendance and the books count from ${fmtDay(start)}.`}
+          </Text>
+        </Card>
+      ) : null}
+
+      <SectionHeader title="Member since" hint="When they first joined the gym. Leave it if that’s the day this plan started." />
+      <View style={s.wrap}>
+        <Chip label="Same as plan start" selected={!since || since >= start} onPress={() => setSince(null)} />
+        <Chip
+          label={since && since < start ? fmtDate(since) : 'Earlier date'}
+          icon="calendar-outline"
+          selected={!!since && since < start}
+          onPress={() => {
+            if (!since || since >= start) setSince(addMonths(start, -12));
+            setPicking('since');
+          }}
         />
       </View>
 
@@ -189,10 +224,30 @@ export default function AddMember() {
             <Chip key={x} label={x} selected={method === x} onPress={() => setMethod(x)} />
           ))}
         </View>
+        {past && amount > 0 ? (
+          <>
+            <Text variant="smallStrong" tone="soft">
+              Paid on
+            </Text>
+            <View style={s.wrap}>
+              <Chip label={`${fmtDate(start)}, when the plan started`} selected={!paidToday} onPress={() => setPaidToday(false)} />
+              <Chip label="Today" selected={paidToday} onPress={() => setPaidToday(true)} />
+            </View>
+          </>
+        ) : null}
       </View>
 
-      <Sheet visible={picking} onClose={() => setPicking(false)} title="Start date" footer={<Button title="Use this date" full onPress={() => setPicking(false)} />}>
-        <DateCalendar value={start} onChange={setStart} min={addDays(now.date, -30)} max={addMonths(now.date, 2)} />
+      <Sheet
+        visible={picking !== null}
+        onClose={() => setPicking(null)}
+        title={picking === 'since' ? 'Member since' : 'Plan start date'}
+        subtitle="Tap the month to jump to another month or year."
+        footer={<Button title="Use this date" full onPress={() => setPicking(null)} />}>
+        {picking === 'since' ? (
+          <DateCalendar key="since" value={since ?? start} onChange={setSince} min={earliest} max={start} jump />
+        ) : (
+          <DateCalendar key="start" value={start} onChange={setStart} min={earliest} max={addMonths(now.date, 3)} jump />
+        )}
       </Sheet>
     </Screen>
   );

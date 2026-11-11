@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { addDays, fmtMonthYear, parts, today, type ISODate } from '@/lib/date';
+import { addDays, fmtMonthYear, MONTHS_SHORT, parts, today, type ISODate } from '@/lib/date';
 import { haptic } from '@/lib/native';
 import { makeStyles, useTheme } from '@/theme';
 
@@ -26,14 +26,20 @@ export function MonthGrid({
   minMonth,
   maxMonth,
   renderDay,
+  jump,
 }: {
   month: ISODate;
   onMonthChange: (m: ISODate) => void;
   minMonth?: ISODate;
   maxMonth?: ISODate;
   renderDay: (date: ISODate) => ReactNode;
+  /** Tapping the month name opens a month and year picker, for dates far from today. */
+  jump?: boolean;
 }) {
   const s = useStyles();
+  const { c } = useTheme();
+  const [picking, setPicking] = useState(false);
+  const [year, setYear] = useState(() => parts(month).y);
   const first = monthStart(month);
   const { y, m } = parts(first);
   const lead = (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7;
@@ -42,13 +48,74 @@ export function MonthGrid({
   while (cells.length % 7) cells.push(null);
   const canPrev = !minMonth || first > monthStart(minMonth);
   const canNext = !maxMonth || first < monthStart(maxMonth);
+  const minY = minMonth ? parts(minMonth).y : -Infinity;
+  const maxY = maxMonth ? parts(maxMonth).y : Infinity;
+  const monthOf = (yy: number, mm: number): ISODate => `${yy}-${String(mm + 1).padStart(2, '0')}-01`;
+  const monthOk = (yy: number, mm: number) => (!minMonth || monthOf(yy, mm) >= monthStart(minMonth)) && (!maxMonth || monthOf(yy, mm) <= monthStart(maxMonth));
+
+  if (jump && picking) {
+    return (
+      <View>
+        <View style={s.head}>
+          <View style={{ opacity: year > minY ? 1 : 0.3 }}>
+            <IconButton icon="chevron-back" label="Previous year" size={36} onPress={() => year > minY && setYear(year - 1)} />
+          </View>
+          <Text variant="h3" align="center" style={{ flex: 1 }}>
+            {year}
+          </Text>
+          <View style={{ opacity: year < maxY ? 1 : 0.3 }}>
+            <IconButton icon="chevron-forward" label="Next year" size={36} onPress={() => year < maxY && setYear(year + 1)} />
+          </View>
+        </View>
+        <View style={s.months}>
+          {MONTHS_SHORT.map((label, i) => {
+            const ok = monthOk(year, i);
+            const sel = parts(first).y === year && parts(first).m === i;
+            return (
+              <Pressable
+                key={label}
+                disabled={!ok}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sel, disabled: !ok }}
+                onPress={() => {
+                  haptic.tap();
+                  onMonthChange(monthOf(year, i));
+                  setPicking(false);
+                }}
+                style={[s.monthCell, { backgroundColor: sel ? c.primary : c.surfaceAlt, opacity: ok ? 1 : 0.35 }]}>
+                <Text variant="label" color={sel ? c.onPrimary : c.ink}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View>
       <View style={s.head}>
-        <Text variant="h3" style={{ flex: 1 }}>
-          {fmtMonthYear(first)}
-        </Text>
+        {jump ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${fmtMonthYear(first)}. Change month or year`}
+            onPress={() => {
+              setYear(parts(first).y);
+              setPicking(true);
+            }}
+            style={({ pressed }) => [{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }, pressed && { opacity: 0.6 }]}>
+            <Text variant="h3">{fmtMonthYear(first)}</Text>
+            <Text variant="small" tone="primary">
+              ▾
+            </Text>
+          </Pressable>
+        ) : (
+          <Text variant="h3" style={{ flex: 1 }}>
+            {fmtMonthYear(first)}
+          </Text>
+        )}
         <View style={{ flexDirection: 'row', gap: 8, opacity: 1 }}>
           <View style={{ opacity: canPrev ? 1 : 0.3 }}>
             <IconButton icon="chevron-back" label="Previous month" size={36} onPress={() => canPrev && onMonthChange(shiftMonth(first, -1))} />
@@ -163,11 +230,14 @@ export function DateCalendar({
   onChange,
   min,
   max,
+  jump,
 }: {
   value: ISODate;
   onChange: (d: ISODate) => void;
   min?: ISODate;
   max?: ISODate;
+  /** Lets the person jump straight to another month or year. */
+  jump?: boolean;
 }) {
   const { c } = useTheme();
   const s = useStyles();
@@ -178,6 +248,7 @@ export function DateCalendar({
       onMonthChange={setMonth}
       minMonth={min}
       maxMonth={max}
+      jump={jump}
       renderDay={(d) => {
         const disabled = (!!min && d < min) || (!!max && d > max);
         const sel = d === value;
@@ -204,4 +275,6 @@ const useStyles = makeStyles(() => ({
   dayPress: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   band: { position: 'absolute', left: 0, right: 0, top: '12%', bottom: '12%' },
   day: { width: '80%', aspectRatio: 1, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  months: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  monthCell: { width: '31%', flexGrow: 1, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 }));

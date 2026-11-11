@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -106,7 +107,9 @@ export default function Supplements() {
         <Empty icon="medkit-outline" title="Nothing added yet" body="Add the supplements your coach suggests and any medicines you take, and tick them off each day." action="Add one" onAction={() => setAdding(true)} />
       )}
 
-      <Card variant="inset" style={{ marginTop: 20, gap: 6 }}>
+      <Button title="Set a medicine alarm" icon="alarm-outline" variant="soft" full style={{ marginTop: 20 }} onPress={() => router.push({ pathname: '/member/alarms', params: { kind: 'medicine' } })} />
+
+      <Card variant="inset" style={{ marginTop: 14, gap: 6 }}>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <Icon name="lock-closed-outline" size={16} tone="soft" />
           <Text variant="smallStrong" tone="soft">

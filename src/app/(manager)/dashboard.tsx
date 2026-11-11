@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { BrandLockup } from '@/components/Brand';
 import { BarChart } from '@/components/Charts';
@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   Group,
+  Icon,
   IconButton,
   Row,
   Screen,
@@ -20,9 +21,9 @@ import {
   Text,
 } from '@/components/ui';
 import { addDays, fmtClockRange, fmtDate, fmtLongDay, fmtRelativeInline, fmtTime, MONTHS_LONG, parts, toMinutes, WEEKDAYS_LONG, weekday } from '@/lib/date';
-import { checkinsOn, crowdNow, hoursOn, membership, nextOpening, revenueByMonth, slotsOn, slotState } from '@/lib/domain';
+import { awayAfterDays, awayMembers, checkinsOn, crowdNow, hoursOn, membership, monthBooks, nextOpening, revenueByMonth, slotsOn, slotState } from '@/lib/domain';
 import { firstName, money } from '@/lib/format';
-import { useGym, useNow } from '@/lib/hooks';
+import { useGym, useIsOwner, useNow } from '@/lib/hooks';
 import { whatsapp } from '@/lib/native';
 import { useApp } from '@/store';
 import { makeStyles, useTheme } from '@/theme';
@@ -40,6 +41,11 @@ export default function Dashboard() {
   const chests = useApp((st) => st.chests);
   const guestPasses = useApp((st) => st.guestPasses);
   const guestDays = useApp((st) => st.settings.guestPassDays);
+  const awayDays = useApp((st) => awayAfterDays(st.settings));
+  const orders = useApp((st) => st.orders);
+  const sales = useApp((st) => st.sales);
+  const ledger = useApp((st) => st.ledger);
+  const owner = useIsOwner();
 
   const infos = useMemo(
     () => gym.members.map((m) => ({ m, info: membership(m, gym.plans, gym.pauses, now.date) })),
@@ -59,6 +65,11 @@ export default function Dashboard() {
   const pendingCoach = ptRequests.filter((r) => r.status === 'pending').length;
   const prizesToHand = chests.filter((x) => x.prize && (x.prize.kind === 'shake' || x.prize.kind === 'merch') && !x.redeemedAt).length;
   const guestsOnWeek = guestPasses.filter((g) => !g.joinedAs && g.activatedOn && now.date <= addDays(g.activatedOn, guestDays - 1)).length;
+  const reserved = orders.filter((o) => o.status === 'requested').length;
+  const away = useMemo(() => awayMembers(gym, now.date, awayDays), [gym, now.date, awayDays]);
+  // Messaged counts only if it was after their last visit; a message from an earlier absence doesn't.
+  const awayUnmessaged = away.filter((a) => !a.member.nudgedOn || (a.lastVisit !== undefined && a.member.nudgedOn <= a.lastVisit)).length;
+  const books = useMemo(() => monthBooks(now.date.slice(0, 7), payments, sales, ledger), [now.date, payments, sales, ledger]);
   const joinedThisMonth = gym.members.filter((m) => m.joinedOn.slice(0, 7) === now.date.slice(0, 7)).length;
 
   const inToday = checkinsOn(gym, now.date, now.mins);
@@ -74,6 +85,15 @@ export default function Dashboard() {
 
   const attention = [
     { show: pendingPauses > 0, icon: 'airplane-outline' as const, title: 'Pause requests', subtitle: 'Members waiting for a yes or no', value: String(pendingPauses), go: () => router.push('/manage/requests') },
+    { show: reserved > 0, icon: 'bag-handle-outline' as const, title: 'Shop reservations', subtitle: 'Members waiting to collect', value: String(reserved), go: () => router.push('/manage/store') },
+    {
+      show: away.length > 0,
+      icon: 'sad-outline' as const,
+      title: 'Not coming',
+      subtitle: awayUnmessaged ? `No visit in ${awayDays}+ days, ${awayUnmessaged} not messaged yet` : `No visit in ${awayDays}+ days, all messaged`,
+      value: String(away.length),
+      go: () => router.push({ pathname: '/members', params: { filter: 'away' } }),
+    },
     { show: ending.length > 0, icon: 'hourglass-outline' as const, title: 'Ending this week', subtitle: 'Send a renewal reminder', value: String(ending.length), go: () => router.push({ pathname: '/members', params: { filter: 'ending' } }) },
     { show: owing.length > 0, icon: 'wallet-outline' as const, title: 'Unpaid dues', subtitle: `${owing.length} members owe money`, value: money(duesTotal), go: () => router.push({ pathname: '/manage/payments', params: { tab: 'dues' } }) },
     { show: openTickets > 0, icon: 'construct-outline' as const, title: 'Open complaints', subtitle: 'Equipment, cleanliness and more', value: String(openTickets), go: () => router.push('/manage/tickets') },
@@ -177,6 +197,19 @@ export default function Dashboard() {
           data={revenue.map((r, i) => ({ label: r.label, value: r.total, highlight: i === revenue.length - 1 }))}
           format={(v) => money(v, { compact: true })}
         />
+        {owner ? (
+          <Pressable accessibilityRole="button" onPress={() => router.push('/manage/books')} style={({ pressed }) => [s.profit, pressed && { opacity: 0.7 }]}>
+            <View style={{ flex: 1 }}>
+              <Text variant="small" tone="soft">
+                Profit this month, after {money(books.totalOut, { compact: true })} spent
+              </Text>
+              <Text variant="h3" tone={books.profit < 0 ? 'danger' : 'ink'}>
+                {money(books.profit)}
+              </Text>
+            </View>
+            <Icon name="chevron-forward" size={18} tone="faint" />
+          </Pressable>
+        ) : null}
       </Card>
     </>
   );
@@ -256,7 +289,7 @@ export default function Dashboard() {
   );
 }
 
-const useStyles = makeStyles(() => ({
+const useStyles = makeStyles((t) => ({
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, marginBottom: 20 },
   cols: { flexDirection: 'row', alignItems: 'flex-start', gap: 28, marginTop: 28 },
   colMain: { flex: 3, minWidth: 0 },
@@ -266,4 +299,5 @@ const useStyles = makeStyles(() => ({
   slotRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   slotTime: { width: 118 },
   slotCount: { width: 44, textAlign: 'right' },
+  profit: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.c.line, paddingTop: 14 },
 }));

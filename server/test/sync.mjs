@@ -7,7 +7,7 @@ const MASTER = process.env.ADMIN_TOKEN ?? 'dev-admin-token';
 const tag = String(Date.now()).slice(-6);
 
 // Earlier runs leave sign-in and sign-up counters behind. Start each run clean.
-const sql = (q) => spawnSync('npx', ['wrangler', 'd1', 'execute', 'gym-db', '--local', '--command', `"${q}"`], { cwd: new URL('..', import.meta.url), shell: true, encoding: 'utf8' });
+const sql = (q, ...flags) => spawnSync('npx', ['wrangler', 'd1', 'execute', 'gym-db', '--local', ...flags, '--command', `"${q}"`], { cwd: new URL('..', import.meta.url), shell: true, encoding: 'utf8' });
 sql('DELETE FROM attempts');
 
 let passed = 0;
@@ -143,6 +143,11 @@ const dev = await call('POST', '/v1/admin/setup', { body: { token: inv1, name: '
 check('a setup link creates an admin account and signs it in', dev.status === 201 && dev.data.token?.startsWith('adm.') && (await call('GET', '/v1/admin/gyms', { token: dev.data.token })).status === 200, JSON.stringify(dev.data));
 check('a setup link works only once', (await call('POST', '/v1/admin/setup', { body: { token: inv1, name: 'Dev Again', email: `dev2${tag}@gmail.test`, password: 'dev-pass-123' } })).status === 410);
 check('the new admin signs in with email and password', (await call('POST', '/v1/auth/owner-login', { body: { email: `dev${tag}@gmail.test`, password: 'dev-pass-123' } })).data.role === 'admin');
+const inv2 = invite();
+check('a username with spaces or symbols is refused', (await call('POST', '/v1/admin/setup', { body: { token: inv2, name: 'Dev User', email: 'no spaces!', password: 'user-pass-123' } })).status === 400);
+check('an admin account can use a username instead of an email', (await call('POST', '/v1/admin/setup', { body: { token: inv2, name: 'Dev User', email: `dev_user.${tag}`, password: 'user-pass-123' } })).status === 201);
+check('the admin signs in with that username, any case', (await call('POST', '/v1/auth/owner-login', { body: { email: `  DEV_User.${tag} `, password: 'user-pass-123' } })).data.role === 'admin');
+check('a wrong password for a username is refused like any other', (await call('POST', '/v1/auth/owner-login', { body: { email: `dev_user.${tag}`, password: 'wrong-pass-123' } })).status === 401);
 const ownerToken = (await call('POST', '/v1/auth/owner-login', { body: { email: `asha${tag}@example.com`, password: 'fresh-pass-77' } })).data.token;
 
 // =============================================================================================
@@ -261,12 +266,22 @@ check('and the next person on the waitlist can be moved up', first(await push(wi
 check('capacity still holds afterwards', first(await push(P15.token, bk(P15, 'bk-late'))).error === 'slot_full');
 check('a booking for a session that doesn’t exist is refused', first(await push(P15.token, put('bookings', 'bk-x', { id: 'bk-x', memberId: P15.id, kind: 'slot', refId: 'nope', date: today, status: 'booked' }))).error === 'no_such_session');
 
+// The desk books a member in (when the gym requires a booking before check-in).
+check('staff can change a slot’s times, days and spots', first(await push(staffA, put('slots', 's1', { ...slotDoc, start: '06:30', end: '07:30', capacity: 3, days: [1, 2, 3, 4, 5, 6, 0] }))).ok);
+check('the desk can book a member into a slot', first(await push(staffA, bk(P15, 'bk-desk'))).ok);
+check('the member sees the booking the desk made', find((await pull(P15.token)).docs, 'bookings', 'bk-desk')?.data.status === 'booked');
+check('a desk booking still respects the spots left', first(await push(staffA, bk(P14, 'bk-desk2'))).error === 'slot_full');
+
 // what a member may change about themselves
 const merged = first(await push(P10.token, put('members', P10.id, { ...P10.doc, name: 'Renamed Person', weeklyGoal: 5, phone: '9999999999', dues: -500, planId: 'plan-free', endDate: '2199-01-01' }))).data;
 check('a member can rename themselves and set a goal', merged?.name === 'Renamed Person' && merged?.weeklyGoal === 5);
 check('but not their phone, dues, plan or end date', merged?.phone === phone(110) && merged?.dues === 0 && merged?.planId === 'plan-monthly' && merged?.endDate === '2099-01-01', JSON.stringify(merged));
 check('nobody can add a member through sync, only through an invite', first(await push(staffA, put('members', 'm_made_up', { id: 'm_made_up', name: 'Ghost', phone: phone(321) }))).error === 'use_invite');
 check('staff can edit a member’s dues', first(await push(staffA, put('members', P11.id, { ...P11.doc, dues: 300 }))).ok);
+check('staff can backdate a member’s plan and joining date', first(await push(staffA, put('members', P11.id, { ...P11.doc, dues: 300, joinedOn: '2019-04-01', startDate: '2026-08-15', endDate: '2026-11-15' }))).ok);
+check('staff note when they messaged a member who stopped coming', first(await push(staffA, put('members', P11.id, { ...P11.doc, dues: 300, joinedOn: '2019-04-01', startDate: '2026-08-15', endDate: '2026-11-15', nudgedOn: today }))).ok);
+const selfEdit = first(await push(P11.token, put('members', P11.id, { ...P11.doc, name: 'Eleven Renamed', nudgedOn: '2000-01-01', joinedOn: '2026-01-01' }))).data;
+check('a member editing their profile keeps the gym’s dates and the message note', selfEdit?.nudgedOn === today && selfEdit?.joinedOn === '2019-04-01' && selfEdit?.startDate === '2026-08-15', JSON.stringify(selfEdit));
 check('two members can’t share a phone number', first(await push(staffA, put('members', P11.id, { ...P11.doc, phone: phone(110) }))).error === 'phone_taken');
 
 // pauses
@@ -308,6 +323,222 @@ check('only staff assign diet plans', first(await push(P1.token, put('dietPlans'
 await push(P1.token, put('progress', P1.id, [{ id: 'pg1', date: today, weight: 70, bodyFat: 18, waist: 80 }]));
 const seenProgress = find((await pull(P10.token)).docs, 'progress', P1.id);
 check('others see only a body weight, not measurements', seenProgress && seenProgress.data.length === 1 && seenProgress.data[0].weight === 70 && !('bodyFat' in seenProgress.data[0]), JSON.stringify(seenProgress));
+
+// =============================================================================================
+// Malformed records: one person's bad data must never reach anyone else's app
+// =============================================================================================
+const stamp = () => new Date().toISOString();
+const damaged = {
+  'a challenge entry with no date': put('challengeEntries', 'ce-bad', { id: 'ce-bad', memberId: P12.id, challengeId: 'c1', value: 10 }),
+  'a challenge entry with a numeric date': put('challengeEntries', 'ce-bad2', { id: 'ce-bad2', memberId: P12.id, challengeId: 'c1', value: 10, date: 20260101 }),
+  'a challenge entry with text for a score': put('challengeEntries', 'ce-bad3', { id: 'ce-bad3', memberId: P12.id, challengeId: 'c1', value: 'fast', date: today }),
+  'a guest pass with a broken start date': put('guestPasses', 'gp-bad', { id: 'gp-bad', hostId: P12.id, name: 'Guest', phone: '9000000000', code: 'G1234', createdOn: today, activatedOn: 'soon', visits: [] }),
+  'a guest pass with no visit list': put('guestPasses', 'gp-bad2', { id: 'gp-bad2', hostId: P12.id, name: 'Guest', phone: '9000000000', code: 'G1235', createdOn: today }),
+  'a pause with no end date': put('pauses', 'ps-bad', { id: 'ps-bad', memberId: P12.id, start: '2099-02-01', reason: 'Travel', status: 'pending', createdAt: stamp() }),
+  'a member name that is not text': put('members', P12.id, { ...P12.doc, name: { first: 'x' } }),
+  'an XP event with an unreadable time': put('xp', 'xp-bad', { id: 'xp-bad', memberId: P12.id, amount: 5, reason: 'x', at: 'whenever' }),
+  'a progress list holding the wrong thing': put('progress', P12.id, ['not an entry']),
+  'a workout log with a broken date': put('workoutLog', P12.id, { soon: ['ex1'] }),
+  'a record stored under a different id': put('lifts', 'lf-x', { id: 'lf-other', memberId: P12.id, exercise: 'Squat', weight: 60, reps: 5, date: today }),
+};
+for (const [what, op] of Object.entries(damaged)) check(`${what} is refused`, first(await push(P12.token, op)).error === 'invalid', JSON.stringify(first(await push(P12.token, op))));
+
+// Every shape the app really writes, so validation can never refuse normal use.
+const normal = {
+  'a lift': put('lifts', 'lf-1', { id: 'lf-1', memberId: P12.id, exercise: 'Back squat', liftKey: 'squat', weight: 62.5, reps: 5, date: today }),
+  'a lift with no strength key': put('lifts', 'lf-2', { id: 'lf-2', memberId: P12.id, exercise: 'Curl', weight: 10, reps: 12, date: today }),
+  'a challenge entry': put('challengeEntries', 'ce-1', { id: 'ce-1', memberId: P12.id, challengeId: 'c1', value: 95.5, date: today }),
+  'a breathing session': put('mindLog', 'md-1', { id: 'md-1', memberId: P12.id, sessionId: 'box', minutes: 3, at: stamp() }),
+  'a guest pass': put('guestPasses', 'gp-1', { id: 'gp-1', hostId: P12.id, name: 'Priya', phone: '9000000001', code: 'G4821', createdOn: today, visits: [] }),
+  'a pause request': put('pauses', 'ps-1', { id: 'ps-1', memberId: P12.id, start: '2099-03-01', end: '2099-03-05', reason: 'Travel', note: 'Goa', status: 'pending', createdAt: stamp() }),
+  'a coach request': put('ptRequests', 'pt-1', { id: 'pt-1', memberId: P12.id, trainerId: 't1', preferredTime: 'Mornings', goal: 'Lose weight', status: 'pending', createdAt: stamp() }),
+  'a support ticket': put('tickets', 'tk-1', { id: 'tk-1', memberId: P12.id, category: 'Equipment', message: 'The treadmill is loud', status: 'open', createdAt: stamp() }),
+  'a notice to myself': put('notices', 'nt-1', { id: 'nt-1', memberId: P12.id, title: 'Booked', body: 'You are in', kind: 'booking', at: stamp(), read: false }),
+  'an XP event': put('xp', 'xp-p12', { id: 'xp-p12', memberId: P12.id, amount: 5, reason: 'Exercise done', at: stamp(), key: 'ex-1' }),
+  'a chest': put('chests', 'ch-p12', { id: 'ch-p12', memberId: P12.id, reason: 'New PR: Curl', earnedAt: stamp() }),
+  'a body progress list': put('progress', P12.id, [{ id: 'pg-1', date: today, weight: 70.5 }, { id: 'pg-2', date: today, weight: 70, bodyFat: 18, waist: 80 }]),
+  'a workout log': put('workoutLog', P12.id, { [today]: ['ex1', 'ex2'] }),
+  'a meal log': put('mealLog', P12.id, { [today]: ['breakfast'] }),
+  'a water count': put('water', P12.id, { [today]: 4 }),
+  'ring claims': put('ringClaims', P12.id, { [today]: ['show', 'train', 'all'] }),
+  'supplements': put('supplements', P12.id, [{ id: 'sp-1', name: 'Creatine', dose: '5 g', time: 'After workout', kind: 'supplement', addedBy: 'member' }]),
+  'a league tier': put('leagueTier', P12.id, 0),
+  'a higher league tier': put('leagueTier', P13.id, 2),
+  'the week a league was settled': put('leagueSettledWeek', P12.id, today),
+  'my own profile': put('members', P12.id, { ...P12.doc, name: 'Renamed Twelve', weeklyGoal: 3, goalWeight: 68, gender: 'female' }),
+};
+for (const [what, op] of Object.entries(normal)) {
+  const token = op.id === P13.id ? P13.token : P12.token;
+  const r = first(await push(token, op));
+  check(`${what} is still accepted`, r?.ok === true, JSON.stringify(r));
+}
+check('a league tier reaches the server', find((await pull(P13.token)).docs, 'leagueTier', P13.id)?.data === 2);
+
+// Strength and endurance test results: the member and the gym see them, nobody else.
+const testLine = (extra = {}) => ({ itemId: 'pushups', name: 'Push-ups', measure: 'reps', better: 'higher', sets: [32], value: 32, target: 40, score: 80, ...extra });
+const testDoc = (m, id, extra = {}) => put('testResults', id, { id, memberId: m.id, date: today, at: stamp(), score: 71, bodyweight: 72.5, lines: [testLine(), testLine({ itemId: 'mile', name: '1 mile brisk walk', measure: 'time', better: 'lower', sets: [905], value: 905, target: 840, score: 93 })], skipped: ['Leg press'], ...extra });
+check('a member saves their own strength test', first(await push(P12.token, testDoc(P12, 'ft-1'))).ok);
+check('the gym can save a test it ran with a member', first(await push(staffA, testDoc(P13, 'ft-2', { by: 'Front desk' }))).ok);
+check('a member can’t save a test for someone else', first(await push(P12.token, testDoc(P13, 'ft-3'))).error === 'forbidden');
+check('a test score over 100 is refused', first(await push(P12.token, testDoc(P12, 'ft-4', { score: 140 }))).error === 'invalid');
+check('a test line with an unknown measure is refused', first(await push(P12.token, testDoc(P12, 'ft-5', { lines: [testLine({ measure: 'miles' })] }))).error === 'invalid');
+check('a member sees their own test results', !!find((await pull(P12.token)).docs, 'testResults', 'ft-1'));
+check('and the one the gym ran with them', !!find((await pull(P13.token)).docs, 'testResults', 'ft-2'));
+check('other members never see someone’s test', !find((await pull(P13.token)).docs, 'testResults', 'ft-1') && !find((await pull(P10.token)).docs, 'testResults', 'ft-2'));
+check('staff see every member’s tests', !!find((await pull(staffA)).docs, 'testResults', 'ft-1') && !!find((await pull(staffA)).docs, 'testResults', 'ft-2'));
+check('a member can’t delete a test result', first(await push(P12.token, put('testResults', 'ft-1', null))).error === 'forbidden');
+const customTest = [{ id: 'plank', name: 'Plank hold', measure: 'time', sets: 1, target: 120, better: 'higher', active: true }];
+check('staff can set up the gym’s own test', first(await push(staffA, put('settings', 'gym', { ...find(start.docs, 'settings', 'gym').data, strengthTest: customTest, awayAfterDays: 5, awayMessage: 'Hi {name}, we miss you!' }))).ok);
+const seenSettings = find((await pull(P12.token)).docs, 'settings', 'gym');
+check('members get the gym’s test and settings', seenSettings?.data.strengthTest?.[0]?.id === 'plank' && seenSettings?.data.awayAfterDays === 5, JSON.stringify(seenSettings?.data).slice(0, 200));
+check('members can’t change the test', first(await push(P12.token, put('settings', 'gym', { strengthTest: [] }))).error === 'forbidden');
+
+// Records stored before these checks existed, or written by staff, are held back on the way out.
+check('staff write a damaged record, as an older version could', first(await push(staffA, put('challengeEntries', 'ce-old', { id: 'ce-old', memberId: P12.id, challengeId: 'c1', value: 5 }))).ok);
+check('a damaged record never reaches other members', !find((await pull(P10.token)).docs, 'challengeEntries', 'ce-old'));
+check('or the staff who could otherwise crash on it', !find((await pull(staffA)).docs, 'challengeEntries', 'ce-old'));
+check('a healthy record next to it still arrives', !!find((await pull(P10.token)).docs, 'challengeEntries', 'ce-1'));
+
+// =============================================================================================
+// Daily limits and prizes: the phone doesn't choose the date, and only the desk unlocks real prizes
+// =============================================================================================
+const dayOff = (n) => new Date(Date.now() + n * 86400_000).toISOString();
+const xpOn = (m, id, at, amount = 150) => put('xp', id, { id, memberId: m.id, amount, reason: 'Exercise done', at });
+const chestOn = (m, id, earnedAt = dayOff(0), extra = {}) => put('chests', id, { id, memberId: m.id, reason: 'New PR: Curl', earnedAt, ...extra });
+
+for (const i of [1, 2, 3, 4]) await push(P13.token, xpOn(P13, `lim-xp${i}`, dayOff(-1)));
+check('XP backdated to yesterday still counts against today’s limit', first(await push(P13.token, xpOn(P13, 'lim-xp5', dayOff(0)))).error === 'daily_limit');
+check('so does XP dated tomorrow', first(await push(P13.token, xpOn(P13, 'lim-xp6', dayOff(1)))).error === 'daily_limit');
+for (const i of [1, 2, 3, 4]) await push(P14.token, chestOn(P14, `lim-ch${i}`, dayOff(-1)));
+check('chests backdated to yesterday still count against today’s limit', first(await push(P14.token, chestOn(P14, 'lim-ch5'))).error === 'daily_limit');
+check('XP from a phone that was offline yesterday is still accepted', first(await push(P11.token, xpOn(P11, 'lim-xp7', dayOff(-1), 20))).ok);
+check('XP dated long ago is refused', first(await push(P11.token, xpOn(P11, 'lim-xp8', dayOff(-30), 20))).error === 'invalid');
+check('XP dated in the future is refused', first(await push(P11.token, xpOn(P11, 'lim-xp9', dayOff(5), 20))).error === 'invalid');
+check('a chest dated long ago is refused', first(await push(P11.token, chestOn(P11, 'lim-ch6', dayOff(-30)))).error === 'invalid');
+
+const earned = first(await push(P11.token, chestOn(P11, 'self-1', dayOff(0), { selfEarned: false })));
+check('a chest a member creates is marked as self-earned, whatever the phone says', earned.ok && earned.data?.selfEarned === true, JSON.stringify(earned));
+check('and the phone is told, so it keeps the same copy', find((await pull(P11.token)).docs, 'chests', 'self-1')?.data.selfEarned === true);
+const { selfEarned: _drop, ...stripped } = earned.data;
+check('a member can’t remove the mark', first(await push(P11.token, put('chests', 'self-1', stripped))).ok && find((await pull(P11.token)).docs, 'chests', 'self-1')?.data.selfEarned === true);
+check('a member can’t take over someone else’s chest', first(await push(P11.token, chestOn(P11, 'lim-ch1'))).error === 'forbidden');
+
+const openAll = async (prefix, extra) => {
+  const prizes = [];
+  for (let b = 0; b < 5; b++) {
+    await push(staffA, ...Array.from({ length: 20 }, (_, i) => chestOn(P11, `${prefix}-${b}-${i}`, dayOff(0), extra)));
+    for (let i = 0; i < 20; i++) prizes.push((await call('POST', `/v1/chests/${prefix}-${b}-${i}/open`, { token: P11.token })).data.prize?.kind);
+  }
+  return prizes;
+};
+const selfPrizes = await openAll('odds-self', { selfEarned: true });
+check('100 self-earned chests pay only XP', selfPrizes.length === 100 && selfPrizes.every((k) => k === 'xp'), selfPrizes.filter((k) => k !== 'xp').join());
+const deskPrizes = await openAll('odds-desk', {});
+check('chests from the desk can still win real prizes', deskPrizes.some((k) => k && k !== 'xp'), deskPrizes.join());
+
+// =============================================================================================
+// Pass keys: what makes a check-in QR impossible to work out from a member ID
+// =============================================================================================
+const keyOf = (docs, id) => find(docs, 'members', id)?.data.passKey;
+const k12 = keyOf((await pull(P12.token)).docs, P12.id);
+check('every new member gets a long random pass key', typeof k12 === 'string' && k12.length >= 40, String(k12));
+check('no two members share a key', keyOf((await pull(staffA)).docs, P13.id) !== k12);
+check('the desk can read it, to check passes offline', keyOf((await pull(staffA)).docs, P12.id) === k12);
+check('other members can’t', keyOf((await pull(P13.token)).docs, P12.id) === undefined);
+check('the key can’t be set when adding a member', (await call('POST', '/v1/members', { token: staffA, body: { name: 'Chosen Key', phone: phone(180), member: { passKey: 'mine' } } })).data.member?.passKey !== 'mine');
+await push(P12.token, put('members', P12.id, { ...P12.doc, name: 'Twelve', passKey: 'chosen-by-me' }));
+check('a member can’t change their own key', keyOf((await pull(P12.token)).docs, P12.id) === k12);
+const { passKey: _k, ...noKey } = find((await pull(staffA)).docs, 'members', P12.id).data;
+check('a staff phone with an older copy can’t wipe the key', first(await push(staffA, put('members', P12.id, noKey))).ok && keyOf((await pull(staffA)).docs, P12.id) === k12);
+await push(staffA, put('members', P12.id, { ...noKey, passKey: 'chosen-by-staff' }));
+check('and staff can’t choose one', keyOf((await pull(staffA)).docs, P12.id) === k12);
+const beforeInvite = (await pull(staffA)).seq;
+const reissued = await call('POST', `/v1/members/${P12.id}/invite`, { token: staffA });
+const rotated = keyOf((await pull(staffA, beforeInvite)).docs, P12.id);
+check('a new login code replaces the key, so a lost phone’s pass stops working', reissued.status === 200 && !!rotated && rotated !== k12, String(rotated));
+const stored = JSON.parse(sql(`SELECT COUNT(*) AS n FROM docs WHERE kind = 'members' AND deleted = 0 AND json_extract(data, '$.passKey') IS NULL`, '--json').stdout || '[]')[0]?.results?.[0]?.n;
+check('no member in the database is left without a key', stored === 0, String(stored));
+
+// =============================================================================================
+// Each gym chooses: chests and prizes, and XP with leaderboards, switch off separately
+// =============================================================================================
+const setFeatures = (features) => call('PATCH', '/v1/gym', { token: ownerToken, body: { features } });
+await push(staffA, chestOn(P11, 'off-1'), chestOn(P11, 'off-won'));
+await call('POST', '/v1/chests/off-won/open', { token: P11.token });
+
+check('the owner turns chests off and keeps XP', (await setFeatures({ gamification: true, chests: false })).status === 200);
+check('members see that it’s off', (await call('GET', `/v1/gyms/${gymA.code}/public`)).data.features?.chests === false);
+check('a member’s phone can’t earn a chest', first(await push(P13.token, chestOn(P13, 'off-2'))).error === 'feature_off');
+check('neither can the desk give one', first(await push(staffA, chestOn(P11, 'off-3'))).error === 'feature_off');
+check('a chest already earned can’t be opened', (await call('POST', '/v1/chests/off-1/open', { token: P11.token })).status === 403);
+check('XP still counts', first(await push(P14.token, xpOn(P14, 'off-xp1', dayOff(0), 5))).ok);
+const won = find((await pull(staffA)).docs, 'chests', 'off-won').data;
+check('the desk can still hand over a prize already won', first(await push(staffA, put('chests', 'off-won', { ...won, redeemedAt: stamp() }))).ok);
+
+check('the owner turns XP off too', (await setFeatures({ gamification: false, chests: true })).status === 200);
+check('XP stops', first(await push(P14.token, xpOn(P14, 'off-xp2', dayOff(0), 5))).error === 'feature_off');
+check('and chests stop with it, because they pay in XP', first(await push(P13.token, chestOn(P13, 'off-4'))).error === 'feature_off');
+
+check('turning both back on restores everything', (await setFeatures({ gamification: true, chests: true })).status === 200 && first(await push(staffA, chestOn(P11, 'off-5'))).ok && (await call('POST', '/v1/chests/off-1/open', { token: P11.token })).status === 200);
+check('a gym that has never set this keeps chests on', (await setFeatures({ nutrition: false })).status === 200 && first(await push(staffA, chestOn(P11, 'off-6'))).ok && first(await push(P14.token, xpOn(P14, 'off-xp3', dayOff(0), 5))).ok);
+
+// =============================================================================================
+// The shop: the owner lists, members reserve at the shop's price, the desk sells
+// =============================================================================================
+const allOk = (r) => r.data.results?.length > 0 && r.data.results.every((x) => x.ok);
+const whey = { id: 'whey', name: 'Whey 1kg', category: 'Supplements', price: 2400, stock: 5, active: true };
+check('the owner lists a product', first(await push(ownerToken, put('products', 'whey', whey))).ok);
+check('the desk can list one too', first(await push(staffA, put('products', 'band', { id: 'band', name: 'Resistance band', category: 'Gear', price: 350, active: true }))).ok);
+check('the owner can take one off sale', first(await push(ownerToken, put('products', 'gone', { id: 'gone', name: 'Old shaker', category: 'Gear', price: 200, active: false }))).ok);
+check('members see what’s on sale', !!find((await pull(P1.token)).docs, 'products', 'whey'));
+check('a member can’t change a price', first(await push(P1.token, put('products', 'whey', { ...whey, price: 1 }))).error === 'forbidden');
+const reserve = (m, id, items) => push(m.token, put('orders', id, { id, memberId: m.id, items, total: 1, status: 'requested', createdAt: stamp() }));
+const ord = first(await reserve(P1, 'o1', [{ productId: 'whey', name: 'Cheap whey', price: 1, qty: 2 }]));
+check('a member reserves at the shop’s price, not the phone’s', ord.ok && ord.data?.total === 4800 && ord.data.items[0].price === 2400 && ord.data.items[0].name === 'Whey 1kg', JSON.stringify(ord));
+check('a member can’t reserve something that doesn’t exist', first(await reserve(P1, 'o2', [{ productId: 'nope', qty: 1 }])).error === 'invalid');
+check('or something taken off sale', first(await reserve(P1, 'o2b', [{ productId: 'gone', qty: 1 }])).error === 'invalid');
+check('or a silly quantity', first(await reserve(P1, 'o2c', [{ productId: 'band', qty: 500 }])).error === 'invalid');
+check('a member can’t reserve in someone else’s name', first(await push(P1.token, put('orders', 'o2d', { id: 'o2d', memberId: P10.id, items: [{ productId: 'band', qty: 1 }], total: 350, status: 'requested', createdAt: stamp() }))).error === 'forbidden');
+check('a member can’t mark their own order as handed over', first(await push(P1.token, put('orders', 'o1', { ...ord.data, status: 'done' }))).error === 'forbidden');
+check('another member can’t see it', !find((await pull(P10.token)).docs, 'orders', 'o1'));
+const sale = { id: 'sale1', date: today, items: ord.data.items, total: 4800, method: 'UPI', memberId: P1.id, orderId: 'o1', at: stamp() };
+check('the desk sees it and hands it over as a sale', !!find((await pull(staffA)).docs, 'orders', 'o1') && allOk(await push(staffA, put('orders', 'o1', { ...ord.data, status: 'done', saleId: 'sale1' }), put('sales', 'sale1', sale))));
+check('the desk records a walk-in sale', first(await push(staffA, put('sales', 'sale2', { id: 'sale2', date: today, items: [{ productId: 'band', name: 'Resistance band', price: 350, qty: 1 }], total: 350, method: 'Cash', at: stamp() }))).ok);
+const o3 = first(await reserve(P10, 'o3', [{ productId: 'band', qty: 1 }]));
+check('a member calls off a reservation the desk hasn’t touched', o3.ok && first(await push(P10.token, put('orders', 'o3', { ...o3.data, status: 'cancelled' }))).ok);
+check('but not one that’s already been handed over', first(await push(P1.token, put('orders', 'o1', { ...ord.data, status: 'cancelled' }))).error === 'forbidden');
+check('members never see the shop’s takings', !find((await pull(P1.token)).docs, 'sales', 'sale1'));
+
+// =============================================================================================
+// Staff pay and the books: the owner's alone. The desk marks attendance without seeing pay.
+// =============================================================================================
+const coach = { id: 't1', name: 'Coach Vik', role: 'Coach', phone: phone(300), payType: 'monthly', pay: 25000, offDays: [0], joinedOn: today, active: true };
+check('the owner adds a coach with their pay', first(await push(ownerToken, put('team', 't1', coach))).ok);
+const deskTeam = find((await pull(staffA)).docs, 'team', 't1');
+check('the desk sees the team without their pay or number', deskTeam?.data.name === 'Coach Vik' && deskTeam.data.pay === undefined && deskTeam.data.payType === undefined && deskTeam.data.phone === undefined, JSON.stringify(deskTeam));
+check('the owner sees the full record', find((await pull(ownerToken)).docs, 'team', 't1')?.data.pay === 25000);
+check('the desk can’t change anyone’s pay', first(await push(staffA, put('team', 't1', { ...coach, pay: 99 }))).error === 'forbidden');
+check('or remove someone from the team', first(await push(staffA, put('team', 't1', null))).error === 'forbidden');
+check('the desk marks attendance', first(await push(staffA, put('attendance', today, { t1: 'A' }))).ok);
+check('the owner records an expense', first(await push(ownerToken, put('ledger', 'l1', { id: 'l1', dir: 'out', date: today, category: 'Rent', amount: 40000 }))).ok);
+check('and pays a salary from the same books', first(await push(ownerToken, put('ledger', 'l2', { id: 'l2', dir: 'out', date: today, category: 'Salaries', amount: 20000, teamId: 't1', period: today.slice(0, 7) }))).ok);
+check('the desk never sees the books', !find((await pull(staffA)).docs, 'ledger', 'l1'));
+check('nor can the desk write to them', first(await push(staffA, put('ledger', 'l3', { id: 'l3', dir: 'in', date: today, category: 'Other', amount: 1 }))).error === 'forbidden');
+check('or delete from them', first(await push(staffA, put('ledger', 'l1', null))).error === 'forbidden');
+check('a repair fetch doesn’t leak the books to the desk', (await call('POST', '/v1/sync/get', { token: staffA, body: { keys: ['ledger/l1', 'team/t1'] } })).data.docs.every((d) => d.kind !== 'ledger' && (d.kind !== 'team' || d.data.pay === undefined)));
+check('members see none of it', (await pull(P1.token)).docs.every((d) => !['team', 'attendance', 'ledger', 'sales'].includes(d.kind)));
+check('a member can’t write to any of it', (await push(P1.token, put('team', 'tx', { id: 'tx' }), put('attendance', today, {}), put('ledger', 'lx', { id: 'lx' }), put('sales', 'sx', { id: 'sx' }))).data.results.every((x) => x.error === 'forbidden'));
+
+// =============================================================================================
+// Switching pauses, guest passes and the shop off
+// =============================================================================================
+const pauseFor = (m, id) => put('pauses', id, { id, memberId: m.id, start: dayOff(3).slice(0, 10), end: dayOff(6).slice(0, 10), reason: 'Travel', status: 'pending', createdAt: stamp() });
+check('the owner turns pausing, guest passes and the shop off', (await setFeatures({ pauses: false, guestPass: false, store: false })).status === 200);
+check('members can’t ask for a pause', first(await push(P13.token, pauseFor(P13, 'pz1'))).error === 'feature_off');
+check('or hand out a guest pass', first(await push(P13.token, put('guestPasses', 'gz1', { id: 'gz1', hostId: P13.id, name: 'Friend', phone: phone(301), code: 'GZ1', createdOn: today, visits: [] }))).error === 'feature_off');
+check('or reserve from the shop', first(await reserve(P13, 'oz1', [{ productId: 'band', qty: 1 }])).error === 'feature_off');
+check('the desk can still pause a member', first(await push(staffA, put('pauses', 'pz2', { id: 'pz2', memberId: P13.id, start: dayOff(10).slice(0, 10), end: dayOff(12).slice(0, 10), reason: 'Injury', status: 'approved', createdAt: stamp() }))).ok);
+check('turning them back on works', (await setFeatures({ nutrition: false })).status === 200 && first(await push(P13.token, pauseFor(P13, 'pz3'))).ok);
 
 // =============================================================================================
 // Gym isolation

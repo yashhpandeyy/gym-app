@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pick your app sounds</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#272b35; --ink:#f2f4f8; --soft:#9aa3b2; --accent:#4f6bff; --ok:#2fbf71; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.4 system-ui, Segoe UI, sans-serif; padding-bottom:110px; }
+  header { padding:28px 20px 8px; max-width:880px; margin:0 auto; }
+  h1 { margin:0 0 6px; font-size:26px; }
+  header p { margin:0; color:var(--soft); }
+  main { max-width:880px; margin:0 auto; padding:12px 20px; display:grid; gap:18px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  section h2 { margin:0; font-size:19px; }
+  section .where { margin:4px 0 14px; color:var(--soft); font-size:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:10px; }
+  .opt { display:flex; align-items:center; gap:10px; border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; cursor:pointer; background:#12151b; user-select:none; }
+  .opt:hover { border-color:#3a4050; }
+  .opt.sel { border-color:var(--accent); background:#1a2040; }
+  .play { flex:none; width:38px; height:38px; border-radius:50%; border:0; background:var(--accent); color:#fff; font-size:15px; cursor:pointer; }
+  .play:active { transform:scale(.92); }
+  .name { flex:1; font-weight:600; }
+  .tag { font-size:12px; color:var(--soft); }
+  .dot { width:18px; height:18px; border-radius:50%; border:2px solid #444b5c; flex:none; }
+  .opt.sel .dot { border-color:var(--accent); background:radial-gradient(circle, var(--accent) 45%, transparent 50%); }
+  .bar { position:fixed; left:0; right:0; bottom:0; background:#0c0e12ee; backdrop-filter:blur(8px); border-top:1px solid var(--line); padding:14px 20px; display:flex; gap:12px; align-items:center; justify-content:center; }
+  .bar .msg { color:var(--soft); font-size:14px; flex:1; max-width:560px; }
+  .apply { background:var(--ok); color:#06210f; border:0; border-radius:12px; padding:13px 26px; font-weight:700; font-size:16px; cursor:pointer; }
+  .reset { background:transparent; color:var(--soft); border:1px solid var(--line); border-radius:12px; padding:12px 16px; cursor:pointer; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pick your app sounds</h1>
+  <p>Tap ▶ to listen, tap a row to choose it for that moment. When you're happy, press <b>Apply</b>, then tell Claude "I selected the ones I like".</p>
+</header>
+<main id="main"></main>
+<div class="bar">
+  <div class="msg" id="msg">Nothing changed yet.</div>
+  <button class="reset" id="reset">Back to current</button>
+  <button class="apply" id="apply">Apply</button>
+</div>
+<script>
+const MANIFEST = {"tap": [{"id": "current", "label": "Current (in the app now)", "file": "sounds/tap-current.wav"}, {"id": "none", "label": "None (silent)", "file": null}, {"id": "soft-click", "label": "Soft click", "file": "sounds/tap-soft-click.wav"}, {"id": "wood-tick", "label": "Wood tick", "file": "sounds/tap-wood-tick.wav"}, {"id": "bubble", "label": "Bubble", "file": "sounds/tap-bubble.wav"}, {"id": "glass-tick", "label": "Glass tick", "file": "sounds/tap-glass-tick.wav"}, {"id": "key", "label": "Keyboard key", "file": "sounds/tap-key.wav"}, {"id": "soft-thump", "label": "Soft thump", "file": "sounds/tap-soft-thump.wav"}, {"id": "blip", "label": "Blip", "file": "sounds/tap-blip.wav"}, {"id": "snap", "label": "Finger snap", "file": "sounds/tap-snap.wav"}, {"id": "marimba", "label": "Marimba", "file": "sounds/tap-marimba.wav"}, {"id": "droplet", "label": "Droplet", "file": "sounds/tap-droplet.wav"}, {"id": "pebble", "label": "Pebble drop", "file": "sounds/tap-pebble.wav"}, {"id": "tiny-bell", "label": "Tiny bell", "file": "sounds/tap-tiny-bell.wav"}, {"id": "rubber", "label": "Rubber band", "file": "sounds/tap-rubber.wav"}, {"id": "switch", "label": "Light switch", "file": "sounds/tap-switch.wav"}, {"id": "sine-soft", "label": "Soft beep", "file": "sounds/tap-sine-soft.wav"}, {"id": "hollow", "label": "Hollow tap", "file": "sounds/tap-hollow.wav"}, {"id": "ping", "label": "Ping", "file": "sounds/tap-ping.wav"}, {"id": "mouse", "label": "Mouse click", "file": "sounds/tap-mouse.wav"}], "success": [{"id": "current", "label": "Current (in the app now)", "file": "sounds/success-current.wav"}, {"id": "none", "label": "None (silent)", "file": null}, {"id": "chime-up", "label": "Two-note chime up", "file": "sounds/success-chime-up.wav"}, {"id": "arpeggio", "label": "Happy arpeggio", "file": "sounds/success-arpeggio.wav"}, {"id": "bell", "label": "Bell ding", "file": "sounds/success-bell.wav"}, {"id": "double-tick", "label": "Double tick", "file": "sounds/success-double-tick.wav"}, {"id": "sparkle", "label": "Sparkle", "file": "sounds/success-sparkle.wav"}, {"id": "marimba-pair", "label": "Marimba pair", "file": "sounds/success-marimba-pair.wav"}, {"id": "soft-chord", "label": "Soft chord", "file": "sounds/success-soft-chord.wav"}, {"id": "low-high", "label": "Low then high", "file": "sounds/success-low-high.wav"}, {"id": "tink", "label": "Single tink", "file": "sounds/success-tink.wav"}, {"id": "triple-up", "label": "Three notes up", "file": "sounds/success-triple-up.wav"}, {"id": "glass-chime", "label": "Glass chime", "file": "sounds/success-glass-chime.wav"}, {"id": "level-up", "label": "Level up", "file": "sounds/success-level-up.wav"}, {"id": "soft-ding", "label": "Soft ding", "file": "sounds/success-soft-ding.wav"}, {"id": "whoop", "label": "Rising whoop", "file": "sounds/success-whoop.wav"}, {"id": "pluck-pair", "label": "Pluck pair", "file": "sounds/success-pluck-pair.wav"}, {"id": "checkmark", "label": "Checkmark", "file": "sounds/success-checkmark.wav"}, {"id": "harp", "label": "Harp gliss", "file": "sounds/success-harp.wav"}], "warn": [{"id": "current", "label": "Current (in the app now)", "file": "sounds/warn-current.wav"}, {"id": "none", "label": "None (silent)", "file": null}, {"id": "buzz", "label": "Low buzz", "file": "sounds/warn-buzz.wav"}, {"id": "down-two", "label": "Two notes down", "file": "sounds/warn-down-two.wav"}, {"id": "dull-thud", "label": "Dull thud", "file": "sounds/warn-dull-thud.wav"}, {"id": "beep-beep", "label": "Beep beep", "file": "sounds/warn-beep-beep.wav"}, {"id": "wobble", "label": "Minor wobble", "file": "sounds/warn-wobble.wav"}, {"id": "sad-slide", "label": "Sad slide", "file": "sounds/warn-sad-slide.wav"}, {"id": "knock-knock", "label": "Knock knock", "file": "sounds/warn-knock-knock.wav"}, {"id": "error-ding", "label": "Low error ding", "file": "sounds/warn-error-ding.wav"}, {"id": "nope", "label": "Nope (low-high-low)", "file": "sounds/warn-nope.wav"}, {"id": "buzzer", "label": "Game-show buzzer", "file": "sounds/warn-buzzer.wav"}, {"id": "thunk", "label": "Soft thunk", "file": "sounds/warn-thunk.wav"}, {"id": "alert-two", "label": "Alert two-tone", "file": "sounds/warn-alert-two.wav"}, {"id": "rubber-low", "label": "Rubbery low", "file": "sounds/warn-rubber-low.wav"}, {"id": "click-clack", "label": "Click clack", "file": "sounds/warn-click-clack.wav"}, {"id": "flat-note", "label": "Flat note", "file": "sounds/warn-flat-note.wav"}], "pop": [{"id": "current", "label": "Current (in the app now)", "file": "sounds/pop-current.wav"}, {"id": "none", "label": "None (silent)", "file": null}, {"id": "bubble-pop", "label": "Bubble pop", "file": "sounds/pop-bubble-pop.wav"}, {"id": "cork", "label": "Cork pop", "file": "sounds/pop-cork.wav"}, {"id": "click-pop", "label": "Click pop", "file": "sounds/pop-click-pop.wav"}, {"id": "soft-blip", "label": "Soft blip", "file": "sounds/pop-soft-blip.wav"}, {"id": "water-drop", "label": "Water drop", "file": "sounds/pop-water-drop.wav"}, {"id": "pluck", "label": "Tiny pluck", "file": "sounds/pop-pluck.wav"}, {"id": "bloop", "label": "Bloop", "file": "sounds/pop-bloop.wav"}, {"id": "pop-high", "label": "High pop", "file": "sounds/pop-pop-high.wav"}, {"id": "tock", "label": "Tock", "file": "sounds/pop-tock.wav"}, {"id": "plip", "label": "Plip", "file": "sounds/pop-plip.wav"}, {"id": "tick-soft", "label": "Soft tick", "file": "sounds/pop-tick-soft.wav"}, {"id": "boop", "label": "Boop", "file": "sounds/pop-boop.wav"}, {"id": "gulp", "label": "Gulp", "file": "sounds/pop-gulp.wav"}, {"id": "tiny-chime", "label": "Tiny chime", "file": "sounds/pop-tiny-chime.wav"}], "flip": [{"id": "current", "label": "Current (in the app now)", "file": "sounds/flip-current.wav"}, {"id": "none", "label": "None (silent)", "file": null}, {"id": "whoosh", "label": "Whoosh", "file": "sounds/flip-whoosh.wav"}, {"id": "card-flick", "label": "Card flick", "file": "sounds/flip-card-flick.wav"}, {"id": "swoosh-up", "label": "Swoosh up", "file": "sounds/flip-swoosh-up.wav"}, {"id": "paper-flap", "label": "Paper flap", "file": "sounds/flip-paper-flap.wav"}, {"id": "ratchet", "label": "Spin ratchet", "file": "sounds/flip-ratchet.wav"}, {"id": "airy-rise", "label": "Airy rise", "file": "sounds/flip-airy-rise.wav"}, {"id": "shimmer", "label": "Shimmer", "file": "sounds/flip-shimmer.wav"}, {"id": "flutter", "label": "Page flutter", "file": "sounds/flip-flutter.wav"}, {"id": "whip", "label": "Whip", "file": "sounds/flip-whip.wav"}, {"id": "spin-up", "label": "Spin up", "file": "sounds/flip-spin-up.wav"}, {"id": "coin-flip", "label": "Coin flip", "file": "sounds/flip-coin-flip.wav"}, {"id": "soft-swish", "label": "Soft swish", "file": "sounds/flip-soft-swish.wav"}, {"id": "zip", "label": "Quick zip", "file": "sounds/flip-zip.wav"}, {"id": "reveal", "label": "Reveal sweep", "file": "sounds/flip-reveal.wav"}], "heavy": [{"id": "current", "label": "Current (in the app now)", "file": "sounds/heavy-current.wav"}, {"id": "none", "label": "None (silent)", "file": null}, {"id": "deep-thud", "label": "Deep thud", "file": "sounds/heavy-deep-thud.wav"}, {"id": "kick", "label": "Kick drum", "file": "sounds/heavy-kick.wav"}, {"id": "wood-knock", "label": "Wood knock", "file": "sounds/heavy-wood-knock.wav"}, {"id": "boom", "label": "Low boom", "file": "sounds/heavy-boom.wav"}, {"id": "rumble", "label": "Rumble shake", "file": "sounds/heavy-rumble.wav"}, {"id": "tom", "label": "Tom drum", "file": "sounds/heavy-tom.wav"}, {"id": "double-thump", "label": "Double thump", "file": "sounds/heavy-double-thump.wav"}, {"id": "punch", "label": "Punch", "file": "sounds/heavy-punch.wav"}, {"id": "drum-low", "label": "Floor drum", "file": "sounds/heavy-drum-low.wav"}, {"id": "chest-knock", "label": "Chest knock", "file": "sounds/heavy-chest-knock.wav"}, {"id": "wobble-low", "label": "Wobbling bass", "file": "sounds/heavy-wobble-low.wav"}, {"id": "slam", "label": "Slam", "file": "sounds/heavy-slam.wav"}, {"id": "triple-thump", "label": "Triple thump", "file": "sounds/heavy-triple-thump.wav"}, {"id": "stone", "label": "Stone drop", "file": "sounds/heavy-stone.wav"}]};
+const CATEGORIES = [
+  { key:'tap',     title:'Button press',          where:'Every normal tap: buttons, tabs, chips, list rows, opening a screen.' },
+  { key:'success', title:'Done / saved',          where:'Something worked: member added, payment saved, check-in confirmed, booking made.' },
+  { key:'warn',    title:'Error / not allowed',   where:'Something went wrong: invalid pass scanned, wrong code, error message pops up.' },
+  { key:'pop',     title:'Small tick-off',        where:'Ticking a meal or item off a checklist (Diet screen).' },
+  { key:'flip',    title:'Award card flip',       where:'A badge or award card flipping over to reveal itself.' },
+  { key:'heavy',   title:'Chest shake',           where:'The moment you press Open on a reward chest and it starts to shake.' },
+];
+const STORE = 'gym-audio-selection';
+const saved = JSON.parse(localStorage.getItem(STORE) || '{}');
+const choice = {};
+CATEGORIES.forEach(c => { choice[c.key] = saved[c.key] || 'current'; });
+
+let current = null;
+function play(file) {
+  if (current) { current.pause(); }
+  if (!file) return;
+  current = new Audio(file); current.volume = 0.9; current.play().catch(() => {});
+}
+const main = document.getElementById('main');
+function render() {
+  main.innerHTML = '';
+  CATEGORIES.forEach(c => {
+    const sec = document.createElement('section');
+    sec.innerHTML = `<h2>${c.title}</h2><p class="where">${c.where}</p>`;
+    const grid = document.createElement('div'); grid.className = 'grid';
+    (MANIFEST[c.key] || []).forEach(o => {
+      const row = document.createElement('div');
+      row.className = 'opt' + (choice[c.key] === o.id ? ' sel' : '');
+      row.innerHTML = `<button class="play" title="Play"${o.file ? '' : ' style="visibility:hidden"'}>▶</button><span class="name">${o.label}</span><span class="dot"></span>`;
+      row.querySelector('.play').onclick = e => { e.stopPropagation(); play(o.file); };
+      row.onclick = () => { choice[c.key] = o.id; play(o.file); render(); status(); };
+      grid.appendChild(row);
+    });
+    sec.appendChild(grid); main.appendChild(sec);
+  });
+}
+function changed() { return CATEGORIES.filter(c => choice[c.key] !== 'current').length; }
+function status(text) { document.getElementById('msg').textContent = text || (changed() ? `${changed()} sound(s) changed. Press Apply to save.` : 'Nothing changed yet.'); }
+document.getElementById('reset').onclick = () => { CATEGORIES.forEach(c => choice[c.key] = 'current'); localStorage.removeItem(STORE); render(); status(); };
+document.getElementById('apply').onclick = () => {
+  localStorage.setItem(STORE, JSON.stringify(choice));
+  const files = {};
+  CATEGORIES.forEach(c => { const o = MANIFEST[c.key].find(x => x.id === choice[c.key]); files[c.key] = { id: o.id, label: o.label, file: o.file }; });
+  const blob = new Blob([JSON.stringify({ savedAt: new Date().toISOString(), selection: files }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'audio-selection.json'; a.click();
+  status('Saved! audio-selection.json was downloaded. Now tell Claude: "I selected the ones I like".');
+};
+render(); status();
+</script>
+</body>
+</html>

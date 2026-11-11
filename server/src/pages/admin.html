@@ -65,8 +65,6 @@
   .auth h1 { font-size: 26px; margin-bottom: 4px; }
   .auth .lede { color: var(--soft); margin: 0 0 22px; }
   .auth .btn.primary { width: 100%; min-height: 48px; }
-  .auth .foot { color: var(--faint); font-size: 13px; margin: 18px 0 0; }
-  .auth code { background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
 
   /* Top bar */
   .bar { position: sticky; top: 0; z-index: 5; background: var(--rail); color: var(--on-rail); }
@@ -166,17 +164,16 @@
     <form id="loginForm" novalidate>
       <h1>Developer console</h1>
       <p class="lede">Sign in with your platform admin account.</p>
-      <label class="field"><span>Email</span><input class="input" id="loginEmail" type="email" autocomplete="username" required></label>
+      <label class="field"><span>Email or username</span><input class="input" id="loginEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
       <label class="field"><span>Password</span><input class="input" id="loginPassword" type="password" autocomplete="current-password" required></label>
       <p class="err" id="loginErr" role="alert"></p>
       <button class="btn primary" type="submit" id="loginGo">Sign in</button>
-      <p class="foot">No admin account yet? In <code>server/</code>, run <code>node scripts/admin-link.mjs</code> for a one-time setup link.</p>
     </form>
     <form id="setupForm" novalidate hidden>
       <h1>Create your admin account</h1>
       <p class="lede" id="setupLede">This setup link works once.</p>
       <label class="field"><span>Your name</span><input class="input" id="setupName" autocomplete="name" maxlength="60" required></label>
-      <label class="field"><span>Email</span><input class="input" id="setupEmail" type="email" autocomplete="username" maxlength="120" required></label>
+      <label class="field"><span>Email or username</span><input class="input" id="setupEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120" required></label>
       <label class="field"><span>Password (8 or more characters)</span><input class="input" id="setupPassword" type="password" autocomplete="new-password" maxlength="100" required></label>
       <label class="field"><span>Type it again</span><input class="input" id="setupPassword2" type="password" autocomplete="new-password" maxlength="100" required></label>
       <p class="err" id="setupErr" role="alert"></p>
@@ -334,7 +331,7 @@
     e.preventDefault();
     const err = $('loginErr');
     const email = $('loginEmail').value.trim(), password = $('loginPassword').value;
-    if (!email || !password) { err.textContent = 'Enter your email and password.'; return; }
+    if (!email || !password) { err.textContent = 'Enter your email or username, and your password.'; return; }
     err.textContent = '';
     busy($('loginGo'), 'Signing in…', async () => {
       const r = await api('POST', '/v1/auth/owner-login', { email, password });
@@ -351,7 +348,7 @@
     const err = $('setupErr');
     const name = $('setupName').value.trim(), email = $('setupEmail').value.trim(), password = $('setupPassword').value;
     if (name.length < 2) { err.textContent = 'Enter your name.'; return; }
-    if (!/^\S+@\S+\.\S{2,}$/.test(email)) { err.textContent = 'Enter a valid email.'; return; }
+    if (!/^\S+@\S+\.\S{2,}$/.test(email) && !/^[a-z0-9][a-z0-9._-]{2,39}$/i.test(email)) { err.textContent = 'Enter an email, or a username of 3 to 40 letters, digits, dots, dashes or underscores.'; return; }
     if (password.length < 8) { err.textContent = 'Use a password of 8 or more characters.'; return; }
     if (password !== $('setupPassword2').value) { err.textContent = 'The two passwords don’t match.'; return; }
     err.textContent = '';

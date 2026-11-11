@@ -3,28 +3,32 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, View } from 'react-native';
 
 import { Avatar, Chip, Empty, IconButton, Input, Screen, StatusPill, Text } from '@/components/ui';
-import { fmtDay, fmtRelativeInline } from '@/lib/date';
-import { membership, type MembershipInfo } from '@/lib/domain';
+import { diffDays, fmtDay, fmtRelativeInline, plural } from '@/lib/date';
+import { awayAfterDays, awayMembers, awayMessageFor, awayTemplate, membership, type Away, type MembershipInfo } from '@/lib/domain';
 import { money } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
+import { whatsapp } from '@/lib/native';
 import { useApp, type Member } from '@/store';
 import { gutter, makeStyles, useTheme } from '@/theme';
 
-type Filter = 'all' | 'active' | 'ending' | 'paused' | 'expired' | 'dues';
+type Filter = 'all' | 'active' | 'away' | 'ending' | 'paused' | 'expired' | 'dues';
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'active', label: 'Active' },
+  { key: 'away', label: 'Not coming' },
   { key: 'ending', label: 'Ending soon' },
   { key: 'paused', label: 'Paused' },
   { key: 'expired', label: 'Expired' },
   { key: 'dues', label: 'Dues' },
 ];
 
-function matches(f: Filter, m: Member, info: MembershipInfo) {
+function matches(f: Filter, m: Member, info: MembershipInfo, away: Map<string, Away>) {
   switch (f) {
     case 'all':
       return true;
+    case 'away':
+      return away.has(m.id);
     case 'active':
       return info.status === 'active';
     case 'ending':
@@ -45,6 +49,10 @@ export default function Members() {
   const members = useApp((st) => st.members);
   const plans = useApp((st) => st.plans);
   const pauses = useApp((st) => st.pauses);
+  const checkins = useApp((st) => st.checkins);
+  const settings = useApp((st) => st.settings);
+  const updateMember = useApp((st) => st.updateMember);
+  const gymName = useApp((st) => st.brandOverride?.name ?? st.link?.gymName ?? '');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>(params.filter ?? 'all');
   const [lastParam, setLastParam] = useState(params.filter);
@@ -60,14 +68,25 @@ export default function Members() {
         .sort((a, b) => a.m.name.localeCompare(b.m.name)),
     [members, plans, pauses, now.date],
   );
-  const counts = Object.fromEntries(FILTERS.map((f) => [f.key, rows.filter((r) => matches(f.key, r.m, r.info)).length])) as Record<Filter, number>;
+  const afterDays = awayAfterDays(settings);
+  const away = useMemo(
+    () => new Map(awayMembers({ members, plans, pauses, checkins }, now.date, afterDays).map((a) => [a.member.id, a])),
+    [members, plans, pauses, checkins, now.date, afterDays],
+  );
+  const counts = Object.fromEntries(FILTERS.map((f) => [f.key, rows.filter((r) => matches(f.key, r.m, r.info, away)).length])) as Record<Filter, number>;
   const q = query.trim().toLowerCase();
   const digits = q.replace(/\D/g, '');
-  const visible = rows.filter(
+  const listed = rows.filter(
     (r) =>
-      matches(filter, r.m, r.info) &&
+      matches(filter, r.m, r.info, away) &&
       (!q || r.m.name.toLowerCase().includes(q) || r.m.code.toLowerCase().includes(q) || (digits.length >= 3 && r.m.phone.includes(digits))),
   );
+  // Longest away first, so the people most likely to quit are at the top.
+  const visible = filter === 'away' ? [...listed].sort((a, b) => (away.get(b.m.id)?.days ?? 0) - (away.get(a.m.id)?.days ?? 0)) : listed;
+  const nudge = (a: Away) => {
+    whatsapp(a.member.phone, awayMessageFor(awayTemplate(settings), a.member, a.days, gymName));
+    updateMember(a.member.id, { nudgedOn: now.date });
+  };
 
   return (
     <Screen
@@ -84,6 +103,11 @@ export default function Members() {
           <Chip key={f.key} label={f.label} count={counts[f.key]} selected={filter === f.key} onPress={() => setFilter(f.key)} />
         ))}
       </ScrollView>
+      {filter === 'away' ? (
+        <Text variant="small" tone="soft" style={{ marginTop: -8, marginBottom: 12 }}>
+          Active members with no visit in {plural(afterDays, 'day')} or more. Tap the WhatsApp button to send your check-in message.
+        </Text>
+      ) : null}
       <FlatList
         data={visible}
         keyExtractor={(r) => r.m.id}
@@ -95,17 +119,20 @@ export default function Members() {
         ListEmptyComponent={
           <Empty icon="search-outline" title="No members match" body="Try another name or clear the filter." action="Show everyone" onAction={() => { setFilter('all'); setQuery(''); }} />
         }
-        renderItem={({ item: { m, info } }) => <MemberRow m={m} info={info} today={now.date} />}
+        renderItem={({ item: { m, info } }) => <MemberRow m={m} info={info} today={now.date} away={filter === 'away' ? away.get(m.id) : undefined} onNudge={nudge} />}
       />
     </Screen>
   );
 }
 
-function MemberRow({ m, info, today }: { m: Member; info: MembershipInfo; today: string }) {
+function MemberRow({ m, info, today, away, onNudge }: { m: Member; info: MembershipInfo; today: string; away?: Away; onNudge: (a: Away) => void }) {
   const { c } = useTheme();
   const s = useStyles();
   let line: string;
-  switch (info.status) {
+  if (away) {
+    const nudged = m.nudgedOn ? diffDays(m.nudgedOn, today) : null;
+    line = `${away.lastVisit ? `Last came ${fmtDay(away.lastVisit)}, ${plural(away.days, 'day')} ago` : `No visit in ${plural(away.days, 'day')}`}${nudged === null ? '' : nudged === 0 ? '. Messaged today' : `. Messaged ${plural(nudged, 'day')} ago`}`;
+  } else switch (info.status) {
     case 'paused':
       line = `Paused until ${fmtDay(info.activePause!.end)}`;
       break;
@@ -118,11 +145,11 @@ function MemberRow({ m, info, today }: { m: Member; info: MembershipInfo; today:
     default:
       line = info.expiringSoon ? `Ends ${fmtRelativeInline(info.end, today)}` : `${info.plan?.name ?? 'Plan'} until ${fmtDay(info.end)}`;
   }
-  return (
+  const row = (
     <Pressable
       accessibilityRole="button"
       onPress={() => router.push(`/manage/member/${m.id}`)}
-      style={({ pressed }) => [s.row, pressed && { backgroundColor: c.surfaceAlt }]}>
+      style={({ pressed }) => [s.row, away && { flex: 1, paddingRight: 8 }, pressed && { backgroundColor: c.surfaceAlt }]}>
       <Avatar name={m.name} size={42} />
       <View style={{ flex: 1, gap: 1 }}>
         <Text variant="label" numberOfLines={1}>
@@ -133,8 +160,16 @@ function MemberRow({ m, info, today }: { m: Member; info: MembershipInfo; today:
           {m.dues > 0 ? `, ${money(m.dues)} due` : ''}
         </Text>
       </View>
-      <StatusPill status={info.expiringSoon ? 'expiring' : info.status} />
+      {away ? null : <StatusPill status={info.expiringSoon ? 'expiring' : info.status} />}
     </Pressable>
+  );
+  if (!away) return row;
+  // The message button sits beside the row, not inside it, so the two taps never nest.
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 16 }}>
+      {row}
+      <IconButton icon="logo-whatsapp" label={`Message ${m.name}`} variant="soft" size={38} onPress={() => onNudge(away)} />
+    </View>
   );
 }
 
