@@ -57,6 +57,7 @@ export function emptyData(): Data {
     supplementLog: {},
     mindLog: [],
     testResults: [],
+    customFitnessTests: [],
     products: [],
     orders: [],
     sales: [],

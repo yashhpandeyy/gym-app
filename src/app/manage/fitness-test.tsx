@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, Card, Chip, IconButton, Input, Screen, SectionHeader, Sheet, Stepper, Text, toast, ToggleRow } from '@/components/ui';
+import { Button, Card, Chip, Group, IconButton, Input, Row, Screen, SectionHeader, Sheet, Stepper, Text, toast, ToggleRow } from '@/components/ui';
 import { DEFAULT_TEST } from '@/data/constants';
 import { fmtSeconds, fmtTestTarget, fmtTestValue, parseDuration, testItems, testPrescription } from '@/lib/domain';
 import { uid } from '@/lib/format';
@@ -33,10 +33,15 @@ export default function FitnessTestSetup() {
   const { c } = useTheme();
   const settings = useApp((st) => st.settings);
   const updateSettings = useApp((st) => st.updateSettings);
+  const customFitnessTests = useApp((st) => st.customFitnessTests);
+  const saveCustomFitnessTest = useApp((st) => st.saveCustomFitnessTest);
+  const deleteCustomFitnessTest = useApp((st) => st.deleteCustomFitnessTest);
   const items = testItems(settings);
   const custom = Array.isArray(settings.strengthTest);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string>();
+  const [saveSheetOpen, setSaveSheetOpen] = useState(false);
+  const [templateLabel, setTemplateLabel] = useState('');
 
   const save = (next: TestItem[]) => updateSettings({ strengthTest: next });
   const move = (i: number, dir: -1 | 1) => {
@@ -120,6 +125,69 @@ export default function FitnessTestSetup() {
         }}
       />
 
+      <Button
+        title="Save current test as a template"
+        icon="bookmark-outline"
+        variant="soft"
+        full
+        disabled={items.length === 0}
+        style={{ marginTop: 8 }}
+        onPress={() => {
+          setTemplateLabel('');
+          setSaveSheetOpen(true);
+        }}
+      />
+
+      <SectionHeader title="Saved test templates" />
+      {customFitnessTests.length === 0 ? (
+        <Text variant="small" tone="soft" style={{ marginBottom: 8 }}>
+          Save a test above to reuse it next time.
+        </Text>
+      ) : (
+        <Group inset={16}>
+          {customFitnessTests.map((t) => (
+            <Row
+              key={t.id}
+              title={t.label}
+              subtitle={`${t.items.length} exercise${t.items.length === 1 ? '' : 's'}`}
+              value="Load"
+              valueTone="primary"
+              onPress={() =>
+                confirm({
+                  title: `Load "${t.label}"?`,
+                  message: 'This replaces the current test. Past results stay.',
+                  confirmText: 'Load',
+                  onConfirm: () => {
+                    updateSettings({ strengthTest: t.items });
+                    toast.success(`Loaded: ${t.label}`);
+                  },
+                })
+              }
+              right={
+                <IconButton
+                  icon="trash-outline"
+                  label={`Delete ${t.label}`}
+                  size={34}
+                  variant="plain"
+                  onPress={() =>
+                    confirm({
+                      title: `Delete "${t.label}"?`,
+                      message: 'This removes the saved template. The active test is not changed.',
+                      confirmText: 'Delete',
+                      destructive: true,
+                      onConfirm: () => {
+                        deleteCustomFitnessTest(t.id);
+                        toast.success(`${t.label} deleted.`);
+                      },
+                    })
+                  }
+                />
+              }
+            />
+          ))}
+        </Group>
+      )}
+
       <SectionHeader title="How the score works" />
       <Text variant="small" tone="soft">
         Each exercise scores out of 100: the share of its full-marks result the member reached. The test score is the average. Weight targets can be a multiple of
@@ -144,6 +212,36 @@ export default function FitnessTestSetup() {
           }
         />
       ) : null}
+
+      <Sheet
+        visible={saveSheetOpen}
+        onClose={() => setSaveSheetOpen(false)}
+        title="Save test as template"
+        subtitle="Give it a name so you can load it again later."
+        footer={
+          <Button
+            title="Save template"
+            full
+            onPress={() => {
+              const label = templateLabel.trim();
+              if (label.length < 2) {
+                toast.error('Give the template a name.');
+                return;
+              }
+              saveCustomFitnessTest({ label, items });
+              toast.success(`"${label}" saved.`);
+              setSaveSheetOpen(false);
+            }}
+          />
+        }>
+        <Input
+          label="Template name"
+          value={templateLabel}
+          onChangeText={setTemplateLabel}
+          placeholder="Beginner Assessment"
+          maxLength={60}
+        />
+      </Sheet>
 
       <Sheet
         visible={!!draft}

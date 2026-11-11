@@ -370,6 +370,15 @@ export type TestItem = {
   better: 'higher' | 'lower';
   active: boolean;
 };
+/** A saved test configuration that can be loaded as the active gym test. */
+export type CustomFitnessTest = {
+  id: string;
+  /** Trainer-facing name shown in the saved tests list, e.g. "Beginner Assessment". */
+  label: string;
+  items: TestItem[];
+  createdOn: ISODate;
+};
+
 /** How one exercise went, with the item's name and target copied in so old results still read right after the owner edits the test. */
 export type TestLine = { itemId: string; name: string; measure: TestMeasure; better: 'higher' | 'lower'; sets: number[]; value: number; target: number; score: number };
 export type TestResult = { id: string; memberId: string; date: ISODate; at: string; score: number; bodyweight?: number; lines: TestLine[]; skipped?: string[]; by?: string };
@@ -506,6 +515,7 @@ export type Data = {
   supplementLog: Record<string, Record<ISODate, string[]>>;
   mindLog: MindSession[];
   testResults: TestResult[];
+  customFitnessTests: CustomFitnessTest[];
   // shop
   products: Product[];
   orders: Order[];

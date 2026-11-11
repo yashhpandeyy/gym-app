@@ -65,6 +65,7 @@ import type {
   Challenge,
   Chest,
   CustomDietTemplate,
+  CustomFitnessTest,
   CustomWorkoutTemplate,
   GuestPass,
   LedgerEntry,
@@ -94,6 +95,7 @@ import type {
   Trainer,
   Settings,
   TicketCategory,
+  TestItem,
   TestResult,
 } from './types';
 
@@ -179,6 +181,8 @@ type Actions = {
   deleteDietTemplate: (id: string) => void;
   completeMind: (sessionId: string, minutes: number, title: string) => void;
   // strength and endurance test
+  saveCustomFitnessTest: (input: { id?: string; label: string; items: TestItem[] }) => void;
+  deleteCustomFitnessTest: (id: string) => void;
   saveTestResult: (r: Omit<TestResult, 'id' | 'at'>) => TestResult;
   removeTestResult: (id: string) => void;
   // shop
@@ -1333,6 +1337,15 @@ export const useApp = create<AppState>()(
         removeLedger: (id) => set({ ledger: get().ledger.filter((x) => x.id !== id) }),
 
         // ---- strength and endurance test ---------------------------------------
+        saveCustomFitnessTest: ({ id, label, items }) => {
+          const s = get();
+          if (id && s.customFitnessTests.some((x) => x.id === id)) {
+            set({ customFitnessTests: s.customFitnessTests.map((x) => x.id === id ? { id, label, items, createdOn: x.createdOn } : x) });
+          } else {
+            set({ customFitnessTests: [...s.customFitnessTests, { id: uid('ft'), label, items, createdOn: today() }] });
+          }
+        },
+        deleteCustomFitnessTest: (id) => set({ customFitnessTests: get().customFitnessTests.filter((x) => x.id !== id) }),
         saveTestResult: (input) => {
           const result: TestResult = { ...input, id: uid('ft'), at: nowStamp() };
           set({ testResults: [...get().testResults, result] });
