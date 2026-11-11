@@ -56,6 +56,18 @@ export type Member = {
   passKey?: string;
   /** The last day the gym sent a "we miss you" message, so nobody gets two in a row. */
   nudgedOn?: ISODate;
+  /** ID of linked partner for couple memberships. */
+  partnerMemberId?: string;
+  partnerName?: string;
+  partnerPhone?: string;
+  isPartner?: boolean;
+  /** Tag for special pricing or context: Couple, Special Price, Doctor Rec., Student, etc. */
+  pricingTag?: string;
+  originalPrice?: number;
+  discountAmount?: number;
+  finalPrice?: number;
+  /** Expected / promised date for clearing remaining dues. */
+  duePaymentDate?: ISODate;
 };
 
 export type PauseStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
@@ -124,6 +136,9 @@ export type Payment = {
   method: PayMethod;
   planId?: string;
   note?: string;
+  dueAmount?: number;
+  dueDate?: ISODate;
+  tag?: string;
 };
 
 export type AnnouncementKind = 'notice' | 'holiday' | 'event' | 'offer';

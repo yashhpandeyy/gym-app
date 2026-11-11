@@ -127,7 +127,7 @@ type Actions = {
   /** Finishes adding a member the server has already created: payment, lead, referral reward. */
   addMember: (
     /** `paidOn`: when the money changed hands, for members entered after the fact. Today if missing. */
-    input: { paid: number; method: PayMethod; leadId?: string; paidOn?: ISODate },
+    input: { paid: number; method: PayMethod; leadId?: string; paidOn?: ISODate; tag?: string; dueDate?: ISODate },
     created: Member,
   ) => string;
   updateMember: (id: string, patch: Partial<Member>) => void;
@@ -741,6 +741,8 @@ export const useApp = create<AppState>()(
                     method: input.method,
                     planId: plan?.id,
                     note: 'New joining',
+                    tag: input.tag,
+                    dueDate: input.dueDate,
                   },
                 ]
               : s.payments;
