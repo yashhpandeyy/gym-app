@@ -48,6 +48,8 @@ export function emptyData(): Data {
     ringClaims: {},
     celebrations: [],
     guestPasses: [],
+    customWorkoutTemplates: [],
+    customDietTemplates: [],
     dietPlans: {},
     mealLog: {},
     water: {},

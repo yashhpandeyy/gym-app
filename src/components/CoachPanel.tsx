@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -18,6 +19,8 @@ export function CoachPanel({ member }: { member: Member }) {
   const plans = useApp((s) => s.dietPlans);
   const workouts = useApp((s) => s.workouts);
   const assignWorkout = useApp((s) => s.assignWorkout);
+  const customWorkoutTemplates = useApp((s) => s.customWorkoutTemplates);
+  const customDietTemplates = useApp((s) => s.customDietTemplates);
   const [workoutOpen, setWorkoutOpen] = useState(false);
   const supplements = useApp((s) => s.supplements);
   const xp = useApp((s) => s.xp);
@@ -122,7 +125,41 @@ export function CoachPanel({ member }: { member: Member }) {
         </>
       ) : null}
 
-      <Sheet visible={workoutOpen} onClose={() => setWorkoutOpen(false)} title="Workout plan" subtitle="Pick a starting point. The member sees it straight away and gets a notification.">
+      {/* Workout plan picker */}
+      <Sheet visible={workoutOpen} onClose={() => setWorkoutOpen(false)} title="Workout plan" subtitle="Pick a plan to assign. The member sees it straight away and gets a notification.">
+        {customWorkoutTemplates.length > 0 ? (
+          <>
+            <SectionHeader title="Your gym's plans" />
+            {customWorkoutTemplates.map((t) => (
+              <Card key={t.id} variant={workout?.title === t.title ? 'soft' : 'inset'} style={{ gap: 6 }}>
+                <Text variant="h3">{t.label}</Text>
+                <Text variant="small" tone="soft">
+                  {t.title}, {t.days.length} session{t.days.length !== 1 ? 's' : ''}: {t.days.map((d) => d.name).join(', ')}.
+                </Text>
+                <Button
+                  title={workout?.title === t.title ? 'Assigned' : 'Assign this plan'}
+                  size="sm"
+                  disabled={workout?.title === t.title}
+                  onPress={() => {
+                    assignWorkout(member.id, t.id);
+                    toast.success(`${t.title} assigned.`);
+                    setWorkoutOpen(false);
+                  }}
+                />
+              </Card>
+            ))}
+          </>
+        ) : null}
+        <Button
+          title="Create a custom plan"
+          variant="soft"
+          full
+          onPress={() => {
+            setWorkoutOpen(false);
+            router.push('/manage/workout-plans');
+          }}
+        />
+        <SectionHeader title="Starter templates" />
         {WORKOUT_TEMPLATES.map((t) => (
           <Card key={t.id} variant={workout?.title === t.title ? 'soft' : 'inset'} style={{ gap: 6 }}>
             <Text variant="h3">{t.label}</Text>
@@ -143,7 +180,41 @@ export function CoachPanel({ member }: { member: Member }) {
         ))}
       </Sheet>
 
-      <Sheet visible={dietOpen} onClose={() => setDietOpen(false)} title="Diet plan" subtitle="Pick a starting point. The member sees it straight away and gets a notification.">
+      {/* Diet plan picker */}
+      <Sheet visible={dietOpen} onClose={() => setDietOpen(false)} title="Diet plan" subtitle="Pick a plan to assign. The member sees it straight away and gets a notification.">
+        {customDietTemplates.length > 0 ? (
+          <>
+            <SectionHeader title="Your gym's plans" />
+            {customDietTemplates.map((t) => (
+              <Card key={t.id} variant={plan?.title === t.title ? 'soft' : 'inset'} style={{ gap: 6 }}>
+                <Text variant="h3">{t.label}</Text>
+                <Text variant="small" tone="soft">
+                  {t.title}. {t.goal}
+                </Text>
+                <Button
+                  title={plan?.title === t.title ? 'Assigned' : 'Assign this plan'}
+                  size="sm"
+                  disabled={plan?.title === t.title}
+                  onPress={() => {
+                    assignDiet(member.id, t.id);
+                    toast.success(`${t.title} assigned.`);
+                    setDietOpen(false);
+                  }}
+                />
+              </Card>
+            ))}
+          </>
+        ) : null}
+        <Button
+          title="Create a custom plan"
+          variant="soft"
+          full
+          onPress={() => {
+            setDietOpen(false);
+            router.push('/manage/diet-plans');
+          }}
+        />
+        <SectionHeader title="Starter templates" />
         {DIET_TEMPLATES.map((t) => (
           <Card key={t.id} variant={plan?.title === t.title ? 'soft' : 'inset'} style={{ gap: 6 }}>
             <Text variant="h3">{t.label}</Text>
@@ -193,7 +264,7 @@ export function CoachPanel({ member }: { member: Member }) {
           ))}
         </View>
         <Text variant="caption" tone="soft">
-          Suggest supplements only. Medicines should come from the member’s doctor.
+          Suggest supplements only. Medicines should come from the member's doctor.
         </Text>
       </Sheet>
     </>

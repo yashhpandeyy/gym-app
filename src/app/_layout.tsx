@@ -50,7 +50,7 @@ const MEMBER_SCREENS = [
   'alarms',
 ];
 const MEMBER_MODALS = ['pause', 'renew', 'edit-profile', 'breathe/[id]'];
-const MANAGER_SCREENS = ['member/[id]', 'requests', 'payments', 'plans', 'leads', 'announcements', 'tickets', 'settings', 'challenges', 'prizes', 'guests', 'classes', 'trainers', 'staff', 'store', 'attendance', 'payroll', 'books', 'fitness-test', 'test-run'];
+const MANAGER_SCREENS = ['member/[id]', 'requests', 'payments', 'plans', 'leads', 'announcements', 'tickets', 'settings', 'challenges', 'prizes', 'guests', 'classes', 'trainers', 'staff', 'store', 'attendance', 'payroll', 'books', 'fitness-test', 'test-run', 'workout-plans', 'diet-plans'];
 const MANAGER_MODALS = ['add-member'];
 
 export function ErrorBoundary(props: ErrorBoundaryProps) {

@@ -64,6 +64,8 @@ import type {
   Celebration,
   Challenge,
   Chest,
+  CustomDietTemplate,
+  CustomWorkoutTemplate,
   GuestPass,
   LedgerEntry,
   LineItem,
@@ -171,6 +173,10 @@ type Actions = {
   removeSupplement: (itemId: string, memberId?: string) => void;
   assignDiet: (memberId: string, templateId: string) => void;
   assignWorkout: (memberId: string, templateId: string) => void;
+  saveWorkoutTemplate: (tpl: Omit<CustomWorkoutTemplate, 'id' | 'createdOn'> & { id?: string }) => void;
+  deleteWorkoutTemplate: (id: string) => void;
+  saveDietTemplate: (tpl: Omit<CustomDietTemplate, 'id' | 'createdOn'> & { id?: string }) => void;
+  deleteDietTemplate: (id: string) => void;
   completeMind: (sessionId: string, minutes: number, title: string) => void;
   // strength and endurance test
   saveTestResult: (r: Omit<TestResult, 'id' | 'at'>) => TestResult;
@@ -1134,13 +1140,20 @@ export const useApp = create<AppState>()(
         },
         assignDiet: (memberId, templateId) => {
           const s = get();
-          const tpl = DIET_TEMPLATES.find((x) => x.id === templateId);
+          const tpl = s.customDietTemplates.find((x) => x.id === templateId) ?? DIET_TEMPLATES.find((x) => x.id === templateId);
           const m = s.members.find((x) => x.id === memberId);
           if (!tpl || !m) return;
-          const { id: _id, label: _label, ...plan } = tpl;
           set({
-            dietPlans: { ...s.dietPlans, [memberId]: { ...plan, coachId: m.trainerId ?? '', updatedOn: today() } },
-            notices: [notice(memberId, 'New diet plan', `${plan.title}. Open Diet to see your meals for the day.`, 'reminder'), ...s.notices],
+            dietPlans: {
+              ...s.dietPlans,
+              [memberId]: {
+                title: tpl.title, goal: tpl.goal, kcal: tpl.kcal, protein: tpl.protein,
+                carbs: tpl.carbs, fat: tpl.fat, waterGlasses: tpl.waterGlasses,
+                meals: tpl.meals, notes: tpl.notes,
+                coachId: m.trainerId ?? '', updatedOn: today(),
+              },
+            },
+            notices: [notice(memberId, 'New diet plan', `${tpl.title}. Open Diet to see your meals for the day.`, 'reminder'), ...s.notices],
           });
         },
         completeMind: (sessionId, minutes, title) => {
@@ -1211,15 +1224,32 @@ export const useApp = create<AppState>()(
         addPlan: (p) => set({ plans: [...get().plans, { ...p, id: uid('pl'), active: true }] }),
         assignWorkout: (memberId, templateId) => {
           const s = get();
-          const tpl = WORKOUT_TEMPLATES.find((x) => x.id === templateId);
+          const tpl = s.customWorkoutTemplates.find((x) => x.id === templateId) ?? WORKOUT_TEMPLATES.find((x) => x.id === templateId);
           const m = s.members.find((x) => x.id === memberId);
           if (!tpl || !m) return;
-          const { id: _id, label: _label, ...plan } = tpl;
           set({
-            workouts: { ...s.workouts, [memberId]: { ...plan, trainerId: m.trainerId ?? '', updatedOn: today() } },
-            notices: [notice(memberId, 'New workout plan', `${plan.title}. Open Workout to see today’s session.`, 'reminder'), ...s.notices],
+            workouts: { ...s.workouts, [memberId]: { title: tpl.title, days: tpl.days, trainerId: m.trainerId ?? '', updatedOn: today() } },
+            notices: [notice(memberId, 'New workout plan', `${tpl.title}. Open Workout to see today's session.`, 'reminder'), ...s.notices],
           });
         },
+        saveWorkoutTemplate: ({ id, ...data }) => {
+          const s = get();
+          if (id && s.customWorkoutTemplates.some((x) => x.id === id)) {
+            set({ customWorkoutTemplates: s.customWorkoutTemplates.map((x) => (x.id === id ? { ...data, id, createdOn: x.createdOn } : x)) });
+          } else {
+            set({ customWorkoutTemplates: [...s.customWorkoutTemplates, { ...data, id: uid('wt'), createdOn: today() }] });
+          }
+        },
+        deleteWorkoutTemplate: (id) => set({ customWorkoutTemplates: get().customWorkoutTemplates.filter((x) => x.id !== id) }),
+        saveDietTemplate: ({ id, ...data }) => {
+          const s = get();
+          if (id && s.customDietTemplates.some((x) => x.id === id)) {
+            set({ customDietTemplates: s.customDietTemplates.map((x) => (x.id === id ? { ...data, id, createdOn: x.createdOn } : x)) });
+          } else {
+            set({ customDietTemplates: [...s.customDietTemplates, { ...data, id: uid('dt'), createdOn: today() }] });
+          }
+        },
+        deleteDietTemplate: (id) => set({ customDietTemplates: get().customDietTemplates.filter((x) => x.id !== id) }),
 
         // ---- the shop ---------------------------------------------------------
         saveProduct: ({ id, ...p }) => {

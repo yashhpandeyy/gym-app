@@ -186,6 +186,16 @@ export type WorkoutPlan = {
   days: WorkoutDay[];
 };
 
+export type CustomWorkoutTemplate = {
+  id: string;
+  /** Trainer-facing name shown in the template picker. */
+  label: string;
+  /** Member-facing plan name. */
+  title: string;
+  days: WorkoutDay[];
+  createdOn: ISODate;
+};
+
 export type LeadStage = 'new' | 'trial' | 'joined' | 'lost';
 export type Lead = {
   id: string;
@@ -304,6 +314,21 @@ export type DietPlan = {
   updatedOn: ISODate;
   meals: Meal[];
   notes?: string;
+};
+
+export type CustomDietTemplate = {
+  id: string;
+  label: string;
+  title: string;
+  goal: string;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  waterGlasses: number;
+  meals: Meal[];
+  notes?: string;
+  createdOn: ISODate;
 };
 
 export type DoseTime = 'Morning' | 'Before workout' | 'After workout' | 'With lunch' | 'Evening' | 'Night';
@@ -472,6 +497,8 @@ export type Data = {
   // guests
   guestPasses: GuestPass[];
   // nutrition and recovery
+  customWorkoutTemplates: CustomWorkoutTemplate[];
+  customDietTemplates: CustomDietTemplate[];
   dietPlans: Record<string, DietPlan>;
   mealLog: Record<string, Record<ISODate, string[]>>;
   water: Record<string, Record<ISODate, number>>;
