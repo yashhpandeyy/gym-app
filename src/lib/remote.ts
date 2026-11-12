@@ -60,6 +60,7 @@ export type NewMember = {
   finalPrice?: number;
   dueAmount?: number;
   duePaymentDate?: ISODate;
+  chequeNumber?: string;
 };
 
 /**
@@ -110,6 +111,7 @@ export async function createMember(input: NewMember): Promise<{ ok: true; member
         paidOn: input.paidOn,
         tag: input.pricingTag,
         dueDate: input.duePaymentDate,
+        chequeNumber: input.chequeNumber,
       },
       member,
     );
@@ -167,6 +169,7 @@ export async function createMember(input: NewMember): Promise<{ ok: true; member
       paidOn: input.paidOn,
       tag: input.pricingTag,
       dueDate: input.duePaymentDate,
+      chequeNumber: input.chequeNumber,
     },
     member,
   );

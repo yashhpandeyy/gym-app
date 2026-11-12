@@ -56,6 +56,7 @@ export default function AddMember() {
   // Payment
   const [paid, setPaid] = useState<string>('');
   const [method, setMethod] = useState<PayMethod>('UPI');
+  const [chequeNumber, setChequeNumber] = useState('');
   const [dueDate, setDueDate] = useState<ISODate>(addDays(now.date, 15));
 
   const [errors, setErrors] = useState<{
@@ -187,6 +188,7 @@ export default function AddMember() {
         finalPrice,
         dueAmount: due,
         duePaymentDate: due > 0 ? dueDate : undefined,
+        chequeNumber: method === 'Cheque' ? chequeNumber.trim() || undefined : undefined,
       });
 
       if (!primaryRes.ok) {
@@ -815,10 +817,13 @@ export default function AddMember() {
         />
 
         <View style={s.wrap}>
-          {(['UPI', 'Cash', 'Card'] as PayMethod[]).map((x) => (
+          {(['UPI', 'Cash', 'Card', 'Cheque'] as PayMethod[]).map((x) => (
             <Chip key={x} label={x} selected={method === x} onPress={() => setMethod(x)} />
           ))}
         </View>
+        {method === 'Cheque' ? (
+          <Input label="Cheque number (optional)" value={chequeNumber} onChangeText={setChequeNumber} placeholder="e.g. 004521" />
+        ) : null}
 
         {/* If dues exist, show promised due date picker */}
         {due > 0 ? (

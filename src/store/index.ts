@@ -83,6 +83,7 @@ import type {
   Member,
   Notice,
   PayMethod,
+  ChequeStatus,
   Payment,
   Plan,
   Prefs,
@@ -131,12 +132,13 @@ type Actions = {
   /** Finishes adding a member the server has already created: payment, lead, referral reward. */
   addMember: (
     /** `paidOn`: when the money changed hands, for members entered after the fact. Today if missing. */
-    input: { paid: number; method: PayMethod; leadId?: string; paidOn?: ISODate; tag?: string; dueDate?: ISODate },
+    input: { paid: number; method: PayMethod; leadId?: string; paidOn?: ISODate; tag?: string; dueDate?: ISODate; chequeNumber?: string },
     created: Member,
   ) => string;
   updateMember: (id: string, patch: Partial<Member>) => void;
   removeMember: (id: string) => void;
-  recordPayment: (memberId: string, amount: number, method: PayMethod, note?: string, dueDate?: ISODate) => Payment;
+  recordPayment: (memberId: string, amount: number, method: PayMethod, note?: string, dueDate?: ISODate, chequeNumber?: string) => Payment;
+  updatePayment: (id: string, patch: Partial<Pick<Payment, 'method' | 'chequeStatus' | 'chequeNumber' | 'amount' | 'note' | 'dueDate'>>) => void;
   setSlotCapacity: (slotId: string, capacity: number) => void;
   addSlot: (input: { start: string; end: string; capacity: number; days: number[] }) => Result;
   updateSlot: (id: string, input: { start: string; end: string; capacity: number; days: number[] }) => Result;
@@ -753,6 +755,8 @@ export const useApp = create<AppState>()(
                     note: 'New joining',
                     tag: input.tag,
                     dueDate: input.dueDate,
+                    chequeNumber: input.chequeNumber,
+                    chequeStatus: input.method === 'Cheque' ? 'pending' as ChequeStatus : undefined,
                   },
                 ]
               : s.payments;
@@ -792,7 +796,7 @@ export const useApp = create<AppState>()(
             pauses: s.pauses.filter((p) => p.memberId !== id),
           });
         },
-        recordPayment: (memberId, amount, method, note, dueDate) => {
+        recordPayment: (memberId, amount, method, note, dueDate, chequeNumber) => {
           const s = get();
           const payment: Payment = {
             id: uid('pay'),
@@ -803,6 +807,8 @@ export const useApp = create<AppState>()(
             method,
             note: note || 'Dues cleared',
             dueDate,
+            chequeNumber,
+            chequeStatus: method === 'Cheque' ? 'pending' : undefined,
           };
           set({
             payments: [...s.payments, payment],
@@ -810,6 +816,9 @@ export const useApp = create<AppState>()(
             notices: [notice(memberId, 'Payment received', `${money(amount)} by ${method}. Invoice ${payment.invoice}.`, 'payment'), ...s.notices],
           });
           return payment;
+        },
+        updatePayment: (id, patch) => {
+          set({ payments: get().payments.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
         },
         setSlotCapacity: (slotId, capacity) => {
           const s = get();

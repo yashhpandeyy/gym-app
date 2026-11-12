@@ -33,11 +33,16 @@ import { firstName, money, phoneDisplay } from '@/lib/format';
 import { useGym, useNow } from '@/lib/hooks';
 import { api, type Invite } from '@/lib/api';
 import { call, confirm, share, whatsapp } from '@/lib/native';
-import { useApp, type PayMethod } from '@/store';
+import { useApp, type PayMethod, type ChequeStatus, type Payment } from '@/store';
 import { makeStyles, useTheme } from '@/theme';
 
-type SheetKind = 'renew' | 'payment' | 'pause' | 'dates' | 'away' | 'book' | null;
-const METHODS: PayMethod[] = ['UPI', 'Cash', 'Card'];
+type SheetKind = 'renew' | 'payment' | 'pause' | 'dates' | 'away' | 'book' | 'editPayment' | 'editMembership' | null;
+const METHODS: PayMethod[] = ['UPI', 'Cash', 'Card', 'Cheque'];
+const CHEQUE_STATUSES: { key: ChequeStatus; label: string }[] = [
+  { key: 'pending', label: '⏳ Pending' },
+  { key: 'cleared', label: '✅ Cleared' },
+  { key: 'bounced', label: '❌ Bounced' },
+];
 
 export default function MemberDetail() {
   const { c, brand } = useTheme();
@@ -55,6 +60,7 @@ export default function MemberDetail() {
   const settings = useApp((st) => st.settings);
   const renew = useApp((st) => st.renew);
   const recordPayment = useApp((st) => st.recordPayment);
+  const updatePayment = useApp((st) => st.updatePayment);
   const checkIn = useApp((st) => st.checkIn);
   const requestPause = useApp((st) => st.requestPause);
   const decidePause = useApp((st) => st.decidePause);
@@ -70,6 +76,7 @@ export default function MemberDetail() {
   const [inviting, setInviting] = useState(false);
   const [planId, setPlanId] = useState(m?.planId ?? '');
   const [method, setMethod] = useState<PayMethod>('UPI');
+  const [chequeNumber, setChequeNumber] = useState('');
   const [amount, setAmount] = useState('');
   const [range, setRange] = useState<[ISODate | null, ISODate | null]>([null, null]);
   const [reason, setReason] = useState(PAUSE_REASONS[0]);
@@ -80,6 +87,16 @@ export default function MemberDetail() {
   const [joinedOn, setJoinedOn] = useState<ISODate>(m?.joinedOn ?? '');
   const [dateField, setDateField] = useState<'start' | 'end' | 'joined'>('start');
   const [bookDate, setBookDate] = useState<ISODate>(now.date);
+  // Edit payment
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [editMethod, setEditMethod] = useState<PayMethod>('UPI');
+  const [editAmount, setEditAmount] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [editChequeNumber, setEditChequeNumber] = useState('');
+  const [editChequeStatus, setEditChequeStatus] = useState<ChequeStatus>('pending');
+  // Edit membership
+  const [editPlanId, setEditPlanId] = useState('');
+  const [agreedPrice, setAgreedPrice] = useState('');
 
   if (!m) {
     return (
@@ -111,7 +128,7 @@ export default function MemberDetail() {
       setPlanId(m.planId);
       setAmount(String(plans.find((p) => p.id === m.planId)?.price ?? ''));
     }
-    if (k === 'payment') setAmount(m.dues ? String(m.dues) : '');
+    if (k === 'payment') { setAmount(m.dues ? String(m.dues) : ''); setChequeNumber(''); }
     if (k === 'pause') setRange([null, null]);
     if (k === 'dates') {
       setStartDate(m.startDate);
@@ -121,7 +138,59 @@ export default function MemberDetail() {
     }
     if (k === 'away') setMessage(awayMessageFor(awayTemplate(settings), m, away?.days ?? awayAfterDays(settings), brand.name));
     if (k === 'book') setBookDate(now.date);
+    if (k === 'editMembership') {
+      setEditPlanId(m.planId);
+      setAgreedPrice(String(m.finalPrice ?? plans.find((p) => p.id === m.planId)?.price ?? ''));
+    }
     setSheet(k);
+  };
+
+  const openEditPayment = (p: Payment) => {
+    setEditingPayment(p);
+    setEditMethod(p.method);
+    setEditAmount(String(p.amount));
+    setEditNote(p.note ?? '');
+    setEditChequeNumber(p.chequeNumber ?? '');
+    setEditChequeStatus(p.chequeStatus ?? 'pending');
+    setSheet('editPayment');
+  };
+
+  const saveEditPayment = () => {
+    if (!editingPayment) return;
+    const amt = parseInt(editAmount, 10);
+    if (!amt || amt <= 0) return toast.error('Enter a valid amount.');
+    const diff = amt - editingPayment.amount;
+    updatePayment(editingPayment.id, {
+      method: editMethod,
+      amount: amt,
+      note: editNote.trim() || editingPayment.note,
+      chequeNumber: editMethod === 'Cheque' ? editChequeNumber.trim() || undefined : undefined,
+      chequeStatus: editMethod === 'Cheque' ? editChequeStatus : undefined,
+    });
+    // Adjust dues if amount changed
+    if (diff !== 0) updateMember(m.id, { dues: Math.max(0, m.dues - diff) });
+    setSheet(null);
+    setEditingPayment(null);
+    toast.success('Payment updated.');
+  };
+
+  const saveEditMembership = () => {
+    const price = parseInt(agreedPrice, 10);
+    if (!price || price <= 0) return toast.error('Enter a valid agreed price.');
+    const plan = plans.find((p) => p.id === editPlanId) ?? plans[0];
+    const totalPaid = myPayments.reduce((sum, p) => sum + p.amount, 0);
+    const newDues = Math.max(0, price - totalPaid);
+    const newEnd = termEnd(m.startDate, plan.months);
+    updateMember(m.id, {
+      planId: plan.id,
+      endDate: newEnd,
+      finalPrice: price,
+      originalPrice: plan.price,
+      discountAmount: plan.price > price ? plan.price - price : 0,
+      dues: newDues,
+    });
+    setSheet(null);
+    toast.success(`Membership updated. ${newDues > 0 ? `${money(newDues)} remaining dues.` : 'Fully paid.'}`);
   };
 
   const sendAway = () => {
@@ -142,16 +211,21 @@ export default function MemberDetail() {
     const amt = parseInt(amount, 10);
     if (!amt || amt <= 0) return toast.error('Enter the amount you collected.');
     const p = renew(m.id, selectedPlan.id, method, amt);
+    // If Cheque, mark the generated payment as pending
+    if (method === 'Cheque') {
+      const latest = [...payments].sort((a, b) => (a.date < b.date ? 1 : -1)).find((pay) => pay.memberId === m.id);
+      if (latest) updatePayment(latest.id, { chequeStatus: 'pending', chequeNumber: chequeNumber.trim() || undefined });
+    }
     setSheet(null);
-    toast.success(`Renewed. Invoice ${p.invoice}.`);
+    toast.success(`Renewed. Invoice ${p.invoice}.${method === 'Cheque' ? ' Cheque pending clearance.' : ''}`);
   };
 
   const doPayment = () => {
     const amt = parseInt(amount, 10);
     if (!amt || amt <= 0) return toast.error('Enter the amount you collected.');
-    const p = recordPayment(m.id, amt, method);
+    const p = recordPayment(m.id, amt, method, undefined, undefined, method === 'Cheque' ? chequeNumber.trim() || undefined : undefined);
     setSheet(null);
-    toast.success(`${money(amt)} recorded. Invoice ${p.invoice}.`);
+    toast.success(`${money(amt)} recorded. Invoice ${p.invoice}.${method === 'Cheque' ? ' Cheque pending clearance.' : ''}`);
   };
 
   const doPause = () => {
@@ -245,6 +319,7 @@ export default function MemberDetail() {
           <Button title="Pause" size="md" variant="outline" disabled={info.status === 'expired'} onPress={() => open('pause')} style={{ flex: 1 }} />
         </View>
         <Button title="Change dates" size="sm" variant="ghost" icon="calendar-outline" onPress={() => open('dates')} />
+        <Button title="Edit plan / discount" size="sm" variant="ghost" icon="create-outline" onPress={() => open('editMembership')} />
         <Text variant="caption" tone="faint">
           Member since {fmtDate(m.joinedOn)}
         </Text>
@@ -384,8 +459,15 @@ export default function MemberDetail() {
       <SectionHeader title="Payments" hint={`${money(myPayments.reduce((sum, p) => sum + p.amount, 0))} in total`} />
       {myPayments.length ? (
         <Group inset={16}>
-          {myPayments.slice(0, 6).map((p) => (
-            <Row key={p.id} title={money(p.amount)} subtitle={`${fmtDate(p.date)}, ${p.method}${p.note ? `, ${p.note}` : ''}`} value={p.invoice} valueTone="faint" />
+          {myPayments.slice(0, 10).map((p) => (
+            <Row
+              key={p.id}
+              title={money(p.amount)}
+              subtitle={`${fmtDate(p.date)}, ${p.method}${p.chequeStatus === 'pending' ? ' ⏳' : p.chequeStatus === 'cleared' ? ' ✅' : p.chequeStatus === 'bounced' ? ' ❌' : ''}${p.note ? `, ${p.note}` : ''}`}
+              value={p.invoice}
+              valueTone="faint"
+              onPress={() => openEditPayment(p)}
+            />
           ))}
         </Group>
       ) : (
@@ -477,6 +559,9 @@ export default function MemberDetail() {
             <Chip key={x} label={x} selected={method === x} onPress={() => setMethod(x)} />
           ))}
         </View>
+        {method === 'Cheque' ? (
+          <Input label="Cheque number (optional)" value={chequeNumber} onChangeText={setChequeNumber} placeholder="e.g. 004521" />
+        ) : null}
       </Sheet>
 
       <Sheet
@@ -491,6 +576,84 @@ export default function MemberDetail() {
             <Chip key={x} label={x} selected={method === x} onPress={() => setMethod(x)} />
           ))}
         </View>
+        {method === 'Cheque' ? (
+          <Input label="Cheque number (optional)" value={chequeNumber} onChangeText={setChequeNumber} placeholder="e.g. 004521" />
+        ) : null}
+      </Sheet>
+
+      <Sheet
+        visible={sheet === 'editPayment'}
+        onClose={() => { setSheet(null); setEditingPayment(null); }}
+        title="Edit payment"
+        subtitle="Change method, amount or cheque status."
+        footer={<Button title="Save changes" full onPress={saveEditPayment} />}>
+        <Input label="Amount" prefix={brand.currency.symbol} value={editAmount} onChangeText={(v) => setEditAmount(v.replace(/\D/g, ''))} keyboardType="number-pad" />
+        <View style={s.wrap}>
+          {METHODS.map((x) => (
+            <Chip key={x} label={x} selected={editMethod === x} onPress={() => setEditMethod(x)} />
+          ))}
+        </View>
+        {editMethod === 'Cheque' ? (
+          <>
+            <Input label="Cheque number (optional)" value={editChequeNumber} onChangeText={setEditChequeNumber} placeholder="e.g. 004521" />
+            <View style={s.wrap}>
+              {CHEQUE_STATUSES.map((cs) => (
+                <Chip key={cs.key} label={cs.label} selected={editChequeStatus === cs.key} onPress={() => setEditChequeStatus(cs.key)} />
+              ))}
+            </View>
+          </>
+        ) : null}
+        <Input label="Note (optional)" value={editNote} onChangeText={setEditNote} placeholder="e.g. Dues cleared" />
+      </Sheet>
+
+      <Sheet
+        visible={sheet === 'editMembership'}
+        onClose={() => setSheet(null)}
+        title="Edit plan / discount"
+        subtitle="Change the plan or agreed price. Remaining dues will be recalculated."
+        footer={<Button title="Save changes" full onPress={saveEditMembership} />}>
+        <View style={s.wrap}>
+          {plans.filter((p) => p.active).map((p) => (
+            <Chip
+              key={p.id}
+              label={`${p.name} · ${money(p.price)}`}
+              selected={editPlanId === p.id}
+              onPress={() => {
+                setEditPlanId(p.id);
+                setAgreedPrice(String(p.price));
+              }}
+            />
+          ))}
+        </View>
+        <Input
+          label="Agreed price"
+          prefix={brand.currency.symbol}
+          value={agreedPrice}
+          onChangeText={(v) => setAgreedPrice(v.replace(/\D/g, ''))}
+          keyboardType="number-pad"
+          hint="Lower than the plan price = discount."
+        />
+        {(() => {
+          const plan = plans.find((p) => p.id === editPlanId) ?? plans[0];
+          const price = parseInt(agreedPrice, 10) || 0;
+          const totalPaid = myPayments.reduce((sum, p) => sum + p.amount, 0);
+          const discount = plan ? Math.max(0, plan.price - price) : 0;
+          const discountPct = plan && plan.price > 0 ? Math.round((discount / plan.price) * 100) : 0;
+          const newDues = Math.max(0, price - totalPaid);
+          return (
+            <View style={{ gap: 6 }}>
+              {discount > 0 ? (
+                <Text variant="small" tone="primary">Discount: {money(discount)} ({discountPct}% off {plan ? plan.name : ''})</Text>
+              ) : null}
+              <Text variant="small" tone={newDues > 0 ? 'danger' : 'success'}>
+                Remaining dues after change: {money(newDues)}
+              </Text>
+              <Text variant="caption" tone="soft">
+                Already paid: {money(totalPaid)} · New end date: {plan ? fmtDate(termEnd(m.startDate, plan.months)) : '—'}
+              </Text>
+            </View>
+          );
+        })()}
       </Sheet>
 
       <Sheet

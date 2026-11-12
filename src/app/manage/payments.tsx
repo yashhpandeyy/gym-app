@@ -27,12 +27,13 @@ export default function Payments() {
   const [collect, setCollect] = useState<Member | null>(null);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<PayMethod>('UPI');
+  const [chequeNumber, setChequeNumber] = useState('');
   const [customDueDate, setCustomDueDate] = useState<ISODate | undefined>(undefined);
 
   const month = monthKey(now.date);
   const thisMonth = payments.filter((p) => monthKey(p.date) === month);
   const total = thisMonth.reduce((sum, p) => sum + p.amount, 0);
-  const byMethod = (['UPI', 'Cash', 'Card'] as PayMethod[]).map((m) => ({
+  const byMethod = (['UPI', 'Cash', 'Card', 'Cheque'] as PayMethod[]).map((m) => ({
     m,
     sum: thisMonth.filter((p) => p.method === m).reduce((x, p) => x + p.amount, 0),
   }));
@@ -58,10 +59,12 @@ export default function Payments() {
       method,
       remainingDues === 0 ? 'Dues cleared' : `Partial payment (${money(remainingDues)} remaining)`,
       remainingDues > 0 ? (customDueDate ?? collect.duePaymentDate) : undefined,
+      method === 'Cheque' ? chequeNumber.trim() || undefined : undefined,
     );
-    toast.success(`${money(amt)} from ${firstName(collect.name)}. Invoice ${p.invoice}.${remainingDues > 0 ? ` ${money(remainingDues)} remaining.` : ''}`);
+    toast.success(`${money(amt)} from ${firstName(collect.name)}. Invoice ${p.invoice}.${remainingDues > 0 ? ` ${money(remainingDues)} remaining.` : ''}${method === 'Cheque' ? ' Cheque pending clearance.' : ''}`);
     setCollect(null);
     setCustomDueDate(undefined);
+    setChequeNumber('');
   };
 
   const openCollect = (m: Member) => {
@@ -114,7 +117,7 @@ export default function Payments() {
               <Row
                 key={p.id}
                 title={nameOf(p.memberId)}
-                subtitle={`${fmtDate(p.date)}, ${p.method}${p.tag ? ` • [${p.tag}]` : ''}${p.note ? ` • ${p.note}` : ''}`}
+                subtitle={`${fmtDate(p.date)}, ${p.method}${p.chequeStatus === 'pending' ? ' ⏳' : p.chequeStatus === 'cleared' ? ' ✅' : p.chequeStatus === 'bounced' ? ' ❌' : ''}${p.tag ? ` • [${p.tag}]` : ''}${p.note ? ` • ${p.note}` : ''}`}
                 value={money(p.amount)}
                 valueTone="ink"
                 onPress={() => router.push(`/manage/member/${p.memberId}`)}
@@ -286,9 +289,12 @@ export default function Payments() {
           autoFocus
         />
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {(['UPI', 'Cash', 'Card'] as PayMethod[]).map((x) => (
+          {(['UPI', 'Cash', 'Card', 'Cheque'] as PayMethod[]).map((x) => (
             <Chip key={x} label={x} selected={method === x} onPress={() => setMethod(x)} />
           ))}
+          {method === 'Cheque' ? (
+            <Input label="Cheque number (optional)" value={chequeNumber} onChangeText={setChequeNumber} placeholder="e.g. 004521" />
+          ) : null}
         </View>
 
         {remainingDues > 0 ? (

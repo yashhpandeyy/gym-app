@@ -125,7 +125,8 @@ export type Booking = {
 
 export type CheckIn = { id: string; memberId: string; at: string; method: 'qr' | 'desk' };
 
-export type PayMethod = 'UPI' | 'Card' | 'Cash';
+export type PayMethod = 'UPI' | 'Card' | 'Cash' | 'Cheque';
+export type ChequeStatus = 'pending' | 'cleared' | 'bounced';
 
 export type Payment = {
   id: string;
@@ -139,6 +140,8 @@ export type Payment = {
   dueAmount?: number;
   dueDate?: ISODate;
   tag?: string;
+  chequeNumber?: string;
+  chequeStatus?: ChequeStatus;
 };
 
 export type AnnouncementKind = 'notice' | 'holiday' | 'event' | 'offer';
