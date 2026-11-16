@@ -36,11 +36,13 @@ import {
 import { hashSecret, hmacCode, newId, randomDigits, randomToken, safeEqual, sha256, verifySecret } from './crypto';
 import { registerAdmin } from './admin';
 import { registerSync } from './sync';
+import { registerAI } from './ai-routes';
 
 const app = new Hono<AppEnv>();
 app.use('*', cors({ origin: '*', allowHeaders: ['authorization', 'content-type'], exposeHeaders: ['x-session-token'], maxAge: 600 }));
 registerSync(app);
 registerAdmin(app);
+registerAI(app);
 
 // ---------------------------------------------------------------------------
 // Public routes
@@ -79,6 +81,18 @@ app.get('/v1/gyms/:code/logo', async (c) => {
   if (!logo) return fail(c, 404, 'not_found', 'No logo.');
   const bytes = Uint8Array.from(atob(logo.data), (ch) => ch.charCodeAt(0));
   return new Response(bytes, { headers: { 'content-type': logo.type, 'cache-control': 'public, max-age=3600', 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*' } });
+});
+
+/** Serve one gym ambiance photo by index. */
+app.get('/v1/gyms/:code/photos/:idx', async (c) => {
+  const g = await gymByCode(c.env.DB, c.req.param('code'));
+  if (!g || g.status !== 'active') return fail(c, 404, 'not_found', 'Not found.');
+  const idx = parseInt(c.req.param('idx'), 10);
+  if (!Number.isInteger(idx) || idx < 0 || idx > 7) return fail(c, 400, 'invalid', 'Invalid photo index.');
+  const photo = await c.env.DB.prepare('SELECT type, data FROM gym_photos WHERE gym_id = ? AND idx = ?').bind(g.id, idx).first<{ type: string; data: string }>();
+  if (!photo) return fail(c, 404, 'not_found', 'Photo not found.');
+  const bytes = Uint8Array.from(atob(photo.data), (ch) => ch.charCodeAt(0));
+  return new Response(bytes, { headers: { 'content-type': photo.type, 'cache-control': 'public, max-age=3600', 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*' } });
 });
 
 /** Owner password or staff PIN sign-in. */
@@ -279,8 +293,63 @@ app.patch('/v1/gym', auth({ roles: ['owner'], allowPending: true }), async (c) =
     ]);
     if (!sets.length) return c.json({ ok: true });
   }
+  // Gym ambiance photos: array of up to 8 data-URIs. Replace all existing photos atomically.
+  if (Array.isArray(b.gymPhotos)) {
+    const photos = (b.gymPhotos as unknown[]).slice(0, 8);
+    const parsed: { idx: number; type: string; data: string }[] = [];
+    for (let i = 0; i < photos.length; i++) {
+      const item = photos[i];
+      if (typeof item !== 'string') continue;
+      const pm = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(item);
+      if (!pm || pm[2].length > 560_000) return fail(c, 400, 'invalid', `Photo ${i} must be a PNG, JPEG or WebP under about 400 KB.`);
+      parsed.push({ idx: i, type: pm[1], data: pm[2] });
+    }
+    const v = String(Date.now());
+    const photosKey = JSON.stringify({ v, c: parsed.length });
+    const batch = [
+      c.env.DB.prepare('DELETE FROM gym_photos WHERE gym_id = ?').bind(s.gymId),
+      c.env.DB.prepare('UPDATE gyms SET photos_key = ? WHERE id = ?').bind(parsed.length ? photosKey : null, s.gymId),
+      ...parsed.map((p) =>
+        c.env.DB.prepare('INSERT INTO gym_photos (gym_id, idx, type, data) VALUES (?, ?, ?, ?)').bind(s.gymId, p.idx, p.type, p.data),
+      ),
+    ];
+    await c.env.DB.batch(batch);
+    if (!sets.length) return c.json({ ok: true });
+  }
   if (!sets.length) return fail(c, 400, 'invalid', 'Nothing to change.');
   await c.env.DB.prepare(`UPDATE gyms SET ${sets.join(', ')} WHERE id = ?`).bind(...vals, s.gymId).run();
+  return c.json({ ok: true });
+});
+
+/** Add one gym ambiance photo. Returns the index it was stored at. Max 8 photos per gym. */
+app.post('/v1/gym/photos', ownerOnly, async (c) => {
+  const s = c.get('s');
+  const b = await body(c);
+  if (typeof b.photo !== 'string') return fail(c, 400, 'invalid', 'Send photo as a data URI.');
+  const m = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(b.photo);
+  if (!m || m[2].length > 560_000) return fail(c, 400, 'invalid', 'Photo must be a PNG, JPEG or WebP under about 400 KB.');
+  const existing = await c.env.DB.prepare('SELECT idx FROM gym_photos WHERE gym_id = ? ORDER BY idx').bind(s.gymId).all<{ idx: number }>();
+  const usedIdxs = new Set(existing.results.map((r) => r.idx));
+  if (usedIdxs.size >= 8) return fail(c, 400, 'limit', 'Maximum 8 photos per gym.');
+  let idx = 0;
+  while (usedIdxs.has(idx)) idx++;
+  const v = String(Date.now());
+  await c.env.DB.batch([
+    c.env.DB.prepare('INSERT INTO gym_photos (gym_id, idx, type, data) VALUES (?, ?, ?, ?)').bind(s.gymId, idx, m[1], m[2]),
+    c.env.DB.prepare("UPDATE gyms SET photos_key = json_set(COALESCE(photos_key, '{\"v\":\"0\",\"c\":0}'), '$.v', ?, '$.c', ?) WHERE id = ?").bind(v, usedIdxs.size + 1, s.gymId),
+  ]);
+  return c.json({ ok: true, idx });
+});
+
+/** Remove one gym ambiance photo by index. */
+app.delete('/v1/gym/photos/:idx', ownerOnly, async (c) => {
+  const s = c.get('s');
+  const idx = parseInt(c.req.param('idx'), 10);
+  if (!Number.isInteger(idx) || idx < 0 || idx > 7) return fail(c, 400, 'invalid', 'Invalid photo index.');
+  await c.env.DB.prepare('DELETE FROM gym_photos WHERE gym_id = ? AND idx = ?').bind(s.gymId, idx).run();
+  const remaining = await c.env.DB.prepare('SELECT COUNT(*) as n FROM gym_photos WHERE gym_id = ?').bind(s.gymId).first<{ n: number }>();
+  const v = String(Date.now());
+  await c.env.DB.prepare("UPDATE gyms SET photos_key = ? WHERE id = ?").bind(remaining?.n ? JSON.stringify({ v, c: remaining.n }) : null, s.gymId).run();
   return c.json({ ok: true });
 });
 

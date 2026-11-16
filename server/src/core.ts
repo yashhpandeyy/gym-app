@@ -3,7 +3,7 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { DEFAULT_PLANS, DEFAULT_SETTINGS } from './defaults';
 import { hashSecret, hmacCode, newId, randomToken, safeEqual, sha256 } from './crypto';
 
-export type Env = { DB: D1Database; ADMIN_TOKEN: string; APP_SECRET: string; SIGNUP_REVIEW?: string };
+export type Env = { DB: D1Database; ADMIN_TOKEN: string; APP_SECRET: string; SIGNUP_REVIEW?: string; ANTHROPIC_API_KEY?: string };
 export type Role = 'owner' | 'staff' | 'member';
 export type Sess = { gymId: string; role: Role; userId: string | null; memberId: string | null };
 export type AppEnv = { Bindings: Env; Variables: { s: Sess; admin: { id: string | null; master: boolean } } };
@@ -99,6 +99,7 @@ export type GymRow = {
   tagline: string;
   primary_color: string;
   logo_key: string | null;
+  photos_key: string | null;
   features: string;
   settings: string;
   status: 'pending' | 'active' | 'suspended';
@@ -122,6 +123,7 @@ export const publicGym = (g: GymRow) => ({
   tagline: g.tagline,
   primaryColor: g.primary_color,
   logoUrl: g.logo_key ? `/v1/gyms/${g.code}/logo?v=${g.logo_key}` : null,
+  gymPhotoUrls: (() => { try { const p = JSON.parse(g.photos_key ?? 'null') as { v: string; c: number } | null; if (!p || !p.c) return null; return Array.from({ length: p.c }, (_, i) => `/v1/gyms/${g.code}/photos/${i}?v=${p.v}`); } catch { return null; } })(),
   features: json(g.features),
 });
 

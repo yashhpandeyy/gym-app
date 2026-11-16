@@ -43,6 +43,7 @@ export type Brand = {
   referral: { reward: string };
   demo: boolean;
   logoUri?: string;
+  gymPhotos?: string[];
 };
 
 export const baseBrand: Brand = brandJson as Brand;
@@ -64,6 +65,8 @@ export type BrandOverride = {
   primary?: string;
   /** Address of the gym's logo on the server. */
   logoUri?: string;
+  /** URLs of gym ambiance photos, shown to members. Empty/absent = no photo section. */
+  gymPhotos?: string[];
   /** Modules the owner turned on or off. Missing keys keep the default (on). */
   features?: Partial<Record<FeatureKey, boolean>>;
   contact?: Partial<Brand['contact']>;
@@ -86,6 +89,7 @@ export function applyBrandOverride(base: Brand, o: BrandOverride | null | undefi
     colors: { ...base.colors, primary: o.primary || base.colors.primary },
     features: { ...base.features, ...o.features },
     logoUri: o.logoUri,
+    gymPhotos: o.gymPhotos,
     contact: { ...base.contact, ...o.contact },
     address: { ...base.address, ...o.address },
     hours: o.hours ?? base.hours,

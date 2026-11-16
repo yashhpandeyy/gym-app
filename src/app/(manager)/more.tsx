@@ -107,10 +107,20 @@ export default function More() {
         ) : null}
       </Group>
 
-      <SectionHeader title="Members’ app" />
+      <SectionHeader title="Members' app" />
       <Group>
         <Row icon="megaphone-outline" title="Announcements" value={`${announcements.length} posted`} onPress={() => router.push('/manage/announcements')} />
         <Row icon="options-outline" title="Booking and pause rules" onPress={() => router.push('/manage/settings')} />
+      </Group>
+
+      <SectionHeader title="Live" />
+      <Group>
+        <Row
+          icon="people-outline"
+          title="Who's here now"
+          subtitle="Present vs absent today, call or message"
+          onPress={() => router.push('/manage/live' as never)}
+        />
       </Group>
 
       <SectionHeader title="Your gym" />
@@ -119,6 +129,7 @@ export default function More() {
         <Row icon="pricetag-outline" title="Plans and prices" onPress={() => router.push('/manage/plans')} />
         {brand.features.classes ? <Row icon="people-outline" title="Classes" subtitle="Yoga, Zumba and other timetabled sessions" onPress={() => router.push('/manage/classes')} /> : null}
         {brand.features.trainers ? <Row icon="barbell-outline" title="Coaches" subtitle="Who members can train with" onPress={() => router.push('/manage/trainers')} /> : null}
+        <Row icon="bug-outline" title="Report a bug to developer" subtitle="Crashes, wrong data, UI issues, feature ideas" onPress={() => router.push('/manage/dev-report' as never)} />
       </Group>
 
       <SectionHeader title="Appearance" />

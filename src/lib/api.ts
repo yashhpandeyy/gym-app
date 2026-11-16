@@ -100,6 +100,7 @@ export type PublicGym = {
   tagline: string;
   primaryColor: string;
   logoUrl: string | null;
+  gymPhotoUrls?: string[] | null;
   features: Record<string, boolean>;
   id?: string;
   status?: GymStatus;
@@ -136,6 +137,10 @@ export const api = {
   bootstrap: () => request<{ role: string; memberId: string | null; gym: FullGym }>('GET', '/v1/bootstrap', { auth: true }),
   updateGym: (patch: { name?: string; tagline?: string; primaryColor?: string; features?: Record<string, boolean>; logo?: string; profile?: GymProfile }) =>
     request<{ ok: true }>('PATCH', '/v1/gym', { auth: true, body: patch }),
+  addGymPhoto: (photo: string) => request<{ ok: true; idx: number }>('POST', '/v1/gym/photos', { auth: true, body: { photo } }),
+  removeGymPhoto: (idx: number) => request<{ ok: true }>('DELETE', `/v1/gym/photos/${idx}`, { auth: true }),
+  submitDevReport: (b: { kind: string; message: string; platform?: string; appVer?: string }) =>
+    request<{ ok: true; id: string }>('POST', '/v1/dev-report', { auth: true, body: b }),
 
   // people
   createMember: (m: { name: string; phone: string; email?: string; member: Record<string, unknown> }) =>

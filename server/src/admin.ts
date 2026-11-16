@@ -15,6 +15,7 @@ import {
   nowSec,
   publicGym,
   recordFail,
+  staffOnly,
   text,
   type AppEnv,
   type Ctx,
@@ -247,5 +248,32 @@ export function registerAdmin(app: Hono<AppEnv>) {
     ]);
     if (created.meta.changes !== 1) return fail(c, 410, 'expired', 'This setup link was already used. Sign in instead.');
     return c.json({ token: await adminToken(c.env, id), role: 'admin', name }, 201);
+  });
+
+  // -------------------------------------------------------------------------
+  // Developer bug reports from the app
+  // -------------------------------------------------------------------------
+
+  /** Submit a bug report from the app (staff or owner, any active gym). */
+  app.post('/v1/dev-report', staffOnly, async (c) => {
+    const db = c.env.DB;
+    const s = c.get('s');
+    const b = await body(c);
+    const kinds = ['crash', 'wrong_data', 'ui_issue', 'feature', 'other'];
+    const kind = kinds.includes(b.kind as string) ? (b.kind as string) : 'other';
+    const message = typeof b.message === 'string' ? b.message.trim().slice(0, 2000) : '';
+    if (message.length < 5) return fail(c, 400, 'invalid', 'Describe the issue in at least 5 characters.');
+    const gym = await db.prepare('SELECT code, name FROM gyms WHERE id = ?').bind(s.gymId).first<{ code: string; name: string }>();
+    const id = newId('rep');
+    await db.prepare('INSERT INTO dev_reports (id, gym_id, gym_code, gym_name, kind, message, platform, app_ver, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, s.gymId, gym?.code ?? '', gym?.name ?? '', kind, message, typeof b.platform === 'string' ? b.platform.slice(0, 20) : null, typeof b.appVer === 'string' ? b.appVer.slice(0, 20) : null, nowIso())
+      .run();
+    return c.json({ ok: true, id });
+  });
+
+  /** List all bug reports, newest first. Admin-only view for the developer. */
+  app.get('/v1/admin/dev-reports', adminOnly, async (c) => {
+    const rows = await c.env.DB.prepare('SELECT r.*, g.name as gym_name FROM dev_reports r LEFT JOIN gyms g ON g.id = r.gym_id ORDER BY r.created_at DESC LIMIT 200').all();
+    return c.json({ reports: rows.results });
   });
 }

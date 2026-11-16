@@ -13,6 +13,7 @@ export function brandFromGym(g: PublicGym): BrandOverride {
     tagline: g.tagline || undefined,
     primary: g.primaryColor,
     logoUri: g.logoUrl ? apiBase() + g.logoUrl : undefined,
+    gymPhotos: g.gymPhotoUrls?.length ? g.gymPhotoUrls.map((u) => (u.startsWith('http') ? u : apiBase() + u)) : undefined,
     features: g.features as Partial<Record<FeatureKey, boolean>>,
     contact: p?.contact,
     address: p?.address,

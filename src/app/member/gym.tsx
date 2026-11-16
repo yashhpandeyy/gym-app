@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { Image, ScrollView, View } from 'react-native';
 
 import { Logo } from '@/components/Brand';
 import { Button, Card, Group, Pill, Row, Screen, SectionHeader, Text } from '@/components/ui';
@@ -15,8 +15,19 @@ export default function GymInfo() {
   const settings = useApp((st) => st.settings);
   const wd = weekday(now.date);
 
+  const gymPhotos = brand.gymPhotos;
+
   return (
     <Screen header="stack" title="Timings and address">
+      {gymPhotos && gymPhotos.length > 0 && (
+        <View style={s.photoStrip}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
+            {gymPhotos.map((uri, i) => (
+              <Image key={i} source={{ uri }} style={s.photo} resizeMode="cover" />
+            ))}
+          </ScrollView>
+        </View>
+      )}
       <View style={s.head}>
         <Logo size={56} />
         <View style={{ flex: 1 }}>
@@ -83,4 +94,6 @@ export default function GymInfo() {
 const useStyles = makeStyles(() => ({
   head: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
   amenities: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  photoStrip: { marginBottom: 16, marginHorizontal: -16 },
+  photo: { width: 220, height: 148, borderRadius: 10 },
 }));

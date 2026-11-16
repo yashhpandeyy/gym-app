@@ -2,7 +2,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
 
 import { Logo, PlateRings } from '@/components/Brand';
 import { Button, Card, Chip, Group, Icon, IconButton, Input, Pill, Row, Screen, SectionHeader, Text, ToggleRow, toast, type IconName } from '@/components/ui';
@@ -60,6 +60,11 @@ export default function Setup() {
   const [features, setFeatures] = useState<Record<string, boolean>>(() => Object.fromEntries(MODULES.map((m) => [m.key, brand.features[m.key] !== false])));
   const [logoData, setLogoData] = useState<string>();
   const [fromLogo, setFromLogo] = useState<string[]>([]);
+  // Photos: mix of existing URLs (from server) and pending data URIs (just picked, not yet saved).
+  // Stored as { uri: string; idx?: number; uploading?: boolean } where idx is the server index for existing.
+  const [photos, setPhotos] = useState<{ uri: string; idx?: number; uploading?: boolean }[]>(
+    () => (brand.gymPhotos ?? []).map((uri, idx) => ({ uri, idx }))
+  );
   const [phone, setPhone] = useState(brand.contact.phoneDisplay || brand.contact.phone);
   const [whats, setWhats] = useState(brand.contact.whatsapp);
   const [email, setEmail] = useState(brand.contact.email);
@@ -116,6 +121,40 @@ export default function Setup() {
       setFromLogo([]);
     }
     preview({ logoUri: uri });
+  };
+
+  const pickPhoto = async () => {
+    if (photos.length >= 8) return toast.error('Maximum 8 photos allowed.');
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.8 });
+    if (r.canceled) return;
+    const ctx = ImageManipulator.manipulate(r.assets[0].uri);
+    ctx.resize({ width: 800 });
+    const img = await ctx.renderAsync();
+    const out = await img.saveAsync({ format: SaveFormat.JPEG, base64: true, compress: 0.8 });
+    const base64 = out.base64 ?? '';
+    if (!base64 || base64.length > 500_000) return toast.error('Photo too large. Try a smaller image.');
+    const dataUri = `data:image/jpeg;base64,${base64}`;
+    const tmpId = Date.now();
+    setPhotos((prev) => [...prev, { uri: dataUri, uploading: true }]);
+    const result = await api.addGymPhoto(dataUri);
+    if (!result.ok) {
+      setPhotos((prev) => prev.filter((p) => p.uri !== dataUri));
+      return toast.error(result.message);
+    }
+    setPhotos((prev) => prev.map((p) => (p.uri === dataUri ? { uri: dataUri, idx: result.data.idx } : p)));
+    haptic.success();
+  };
+
+  const removePhoto = async (uri: string, idx?: number) => {
+    if (idx !== undefined) {
+      setPhotos((prev) => prev.map((p) => (p.uri === uri ? { ...p, uploading: true } : p)));
+      const result = await api.removeGymPhoto(idx);
+      if (!result.ok) {
+        setPhotos((prev) => prev.map((p) => (p.uri === uri ? { ...p, uploading: false } : p)));
+        return toast.error(result.message);
+      }
+    }
+    setPhotos((prev) => prev.filter((p) => p.uri !== uri));
   };
 
   const pickColour = (hexValue: string) => {
@@ -273,7 +312,7 @@ export default function Setup() {
         />
       </View>
 
-      <SectionHeader title="Logo" hint="Square works best" />
+      <SectionHeader title="Logo" hint="Shown as the app icon throughout the app" />
       <Pressable accessibilityRole="button" accessibilityLabel="Choose a logo" onPress={pickLogo} style={[s.logoBox, { borderColor: c.line, backgroundColor: c.surface }]}>
         <Logo size={56} />
         <View style={{ flex: 1 }}>
@@ -284,6 +323,33 @@ export default function Setup() {
         </View>
         <Icon name="image-outline" size={22} tone="primary" />
       </Pressable>
+
+      <SectionHeader title="Gym photos" hint={`${photos.length}/8 · shown to members`} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+        {photos.map((p) => (
+          <View key={p.uri} style={{ position: 'relative' }}>
+            <Image source={{ uri: p.uri }} style={{ width: 110, height: 80, borderRadius: 8, opacity: p.uploading ? 0.4 : 1 }} resizeMode="cover" />
+            {!p.uploading && (
+              <TouchableOpacity
+                style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => removePhoto(p.uri, p.idx)}
+              >
+                <Icon name="close" size={12} color="#fff" />
+              </TouchableOpacity>
+            )}
+          </View>
+        ))}
+        {photos.length < 8 && (
+          <Pressable
+            onPress={pickPhoto}
+            style={{ width: 110, height: 80, borderRadius: 8, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c.line, alignItems: 'center', justifyContent: 'center', gap: 4 }}
+            accessibilityLabel="Add a gym photo"
+          >
+            <Icon name="add-outline" size={22} tone="primary" />
+            <Text variant="caption" tone="soft">Add photo</Text>
+          </Pressable>
+        )}
+      </ScrollView>
 
       <SectionHeader title="Colour" hint={normal(hex)} />
       {fromLogo.length ? (
